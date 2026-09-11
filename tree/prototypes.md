@@ -18,6 +18,30 @@ and [Realtime layer](architecture.md#realtime-layer).
 Question: does the clock feel shared, and does the video stay with it when
 someone nudges? What did the model in the tree get wrong?
 
+Asset: `prototypes/shared-clock.html` on the `prototype/shared-clock` branch.
+One file, double-click to open. Two simulated devices with adjustable clock
+skew and network delay, a simulated Durable Object between them, real time,
+and six guided walkthroughs. The pure module inside it, `PomoClock`, is the
+part worth lifting.
+
+Found while building, not yet decided:
+
+- The video follows the clock by target position (how far into the phase we
+  are), not by a delta per command. One rule covers nudge, skip, join
+  mid-phase, and rollover, and it needs no seek bookkeeping. The tree's
+  wording of "seek by the same delta" should change to this.
+- Rollover is the DO's job. When the end time passes, the DO flips the phase
+  from its alarm and chains the next end time from the exact old end, not
+  from "now". The tree never said who flips the phase.
+- Devices apply nothing locally. They show only the row the DO sent back, so
+  on a slow link your own press lags by a round trip. Scenario two is where
+  to feel whether that is fine or whether commands need to apply
+  optimistically. If they do, the DO's row still wins on arrival.
+- A device that reconnects measures its offset again and trusts nothing from
+  before. A phone that slept is the case.
+- The real transport is not tested here. That is the first implementation,
+  not a prototype.
+
 Blocked by: nothing.
 
 ### Open: User-owned tables, built

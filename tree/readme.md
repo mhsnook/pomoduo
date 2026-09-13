@@ -28,7 +28,11 @@ the product; the pair is.
 
 - Domain: a pomodoro timer for coworking with a friend, grown from
   [pomodance](https://emju.in/pomodance) (source: `src/routes/(projects)/pomodance/`
-  in the emju-site repo, on origin/main).
+  in the emju-site repo, on origin/main). Pomodance's file layout was shaped
+  by living inside another site and is not a convention here.
+- Bog-standard, self-documenting, stock approaches to everything: file
+  layout, tooling, libraries, naming. When a choice is not the stock one,
+  ask before making it.
 - Skills for every session here: `grilling`, `domain-modeling`, and
   `prototype` when a question is about how something should look or feel.
 - This map carries prototype work, not only decisions. A question may close by

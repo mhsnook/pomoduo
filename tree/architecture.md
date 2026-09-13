@@ -6,17 +6,19 @@ How pomoduo is built. Settled sections are decisions; open sections are not.
 ## Stack
 
 A fresh app in this repo on TanStack Start (React 19) and Cloudflare Workers,
-the same stack as emju-site. The pomodance timer, pomo, and ledger model in
-`-lib.ts` is the starting point and gets lifted, not rewritten. Cloudflare's
-Durable Objects are the natural home for a session, one object per session.
+the same stack as emju-site. The pomodance timer, pomo, and ledger model is
+the starting point and gets lifted, not rewritten. Its `-lib.ts` layout was a
+convention for living inside another site's router and does not carry over:
+files go where a stock TanStack Start app puts them (`src/lib`, `src/routes`,
+`src/server`). Cloudflare's Durable Objects are the natural home for a
+session, one object per session.
 
 ## Identity
 
-Cloudflare Access for now, the way faustinajohnson.com does it: Access
+Cloudflare Access for now, the way Emdash uses it for identity:
 authenticates at the edge and issues a JWT, and the app verifies it against a
-team domain and an AUD tag. This can move to WorkOS later, or to party-db's own
-auth if party-db becomes the realtime layer. A person is the same person on
-every device.
+team domain and an AUD tag. This can move to WorkOS later. Either way, a person
+is the same person on every device.
 
 ## Realtime layer
 

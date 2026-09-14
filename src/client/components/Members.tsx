@@ -4,8 +4,12 @@ import { cn } from '../lib/format'
 /** Who is in the session, and what each of them is working on. */
 export function Members({ members, you }: { members: Member[]; you: string }) {
 	if (members.length === 0) return null
+	// everyone else first, the ones here before the ones away; you come last
 	const sorted = [...members].sort(
-		(a, b) => Number(b.here) - Number(a.here) || b.seenAt - a.seenAt,
+		(a, b) =>
+			Number(a.id === you) - Number(b.id === you) ||
+			Number(b.here) - Number(a.here) ||
+			b.seenAt - a.seenAt,
 	)
 	return (
 		<section data-testid="members" className="flex flex-col gap-2">

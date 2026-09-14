@@ -138,6 +138,19 @@ Tests: [User-owned tables in party-db](architecture.md#user-owned-tables-in-part
 Question: what is the smallest change to party-db that makes this true, and
 what does it cost the transparent and RDBMS modes that exist today?
 
+Built on 2026-09-15 on party-db's `user-owned-tables` branch, not merged or
+published. A collection declares `ownerColumn`, the uid is `claims.sub` from
+the existing `auth` hook, writes are stamped and checked, and the snapshot,
+backlog, and fan-out carry only a socket's own rows. A room with no access
+declarations behaves exactly as before. 239 unit and 57 integration tests
+pass; Postgres ran untested for lack of a database.
+
+Waiting on Em to confirm four choices the build made: the uid comes from
+`claims.sub`; composed hosts need a new `broadcastTo` option; an owner delete
+is routed by the stored row; the old unenforced-access warning is gone. One
+gap it found: a socket keeps the uid it connected with, so logging in needs a
+reconnect.
+
 Blocked by: nothing. Lives in the party-db repo.
 
 ### Open: A yap break end to end

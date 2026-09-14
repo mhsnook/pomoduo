@@ -67,7 +67,7 @@
   <div class="intro">
     <p><strong>The question.</strong> Two people in a session share one clock. The goal is that their timers <em>finish</em> together, because the end of a phase is when the call turns on or off. Videos may drift a little. Does the model below get there without videos jumping more than once per press?</p>
     <ul>
-      <li><strong>Commands are relative or fresh.</strong> Jump ±10s and pause/resume are relative to wherever you are. "Skip to the next phase" starts that phase fresh.</li>
+      <li><strong>Commands are relative or fresh.</strong> Jump ±10s and pause/resume are relative to wherever you are. "Skip to the next phase" starts that phase fresh, and so does a +10s that would run past the end.</li>
       <li><strong>You see your own press at once.</strong> Your device applies it straight away. The Durable Object applies it when it arrives and sends the result to everyone.</li>
       <li><strong>A video moves once per command.</strong> The presser's video moves at the press, and everyone else's moves when the command reaches them. Nothing corrects a video afterwards. A new phase starts its playlist at the shared place.</li>
       <li><strong>Only the timer settles.</strong> When the DO's answer arrives, your timer takes the DO's end time, so a skip that reaches you late starts at 18.5s instead of 20s. The DO flips the phase itself, and in the real app that is also when the call opens or closes.</li>
@@ -137,30 +137,31 @@ const PomoClock = (() => {
     playlist: { work: 0, break: 0 },
   })
 
+  /** Fresh: the next phase starts from the top, and this phase's playlist keeps the place it reached. */
+  function skip(clock, durations, now) {
+    const p = otherPhase(clock.phase)
+    const playlist = { ...clock.playlist, [clock.phase]: clock.playlist[clock.phase] + elapsedIn(clock, durations, now) }
+    return { ...at(p, durations[p], clock.endsAt !== null, now), playlist }
+  }
+
   /**
-   * Lifted from pomodance's scrubTimer. A nudge that runs off the end of a phase
-   * carries into the next one: the phase being left runs its playlist out to the
-   * edge, and the phase being joined picks up where its playlist stopped. On a
-   * running clock a nudge moves the end time by exactly the nudge, whenever it
-   * is applied, so the presser and the DO always agree on it.
+   * A jump of ±deltaMs. Inside the phase it moves the end time by exactly the
+   * jump, whenever it is applied, so the presser and the DO agree on it. A jump
+   * forward past the end starts the next phase fresh, the same as a skip. A
+   * jump back past the start carries into the previous phase, as pomodance's
+   * scrub does, and rewinds that phase's playlist with the clock.
    */
   function nudge(clock, durations, deltaMs, now) {
     const duration = durations[clock.phase]
-    const elapsed = Math.max(0, duration - remainingIn(clock, now))
-    const target = elapsed + deltaMs
+    const target = elapsedIn(clock, durations, now) + deltaMs
+    if (target >= duration) return skip(clock, durations, now)
     const running = clock.endsAt !== null
-    const playlist = { ...clock.playlist }
-    if (target >= 0 && target < duration) return { ...at(clock.phase, duration - target, running, now), playlist }
-    const next = otherPhase(clock.phase)
-    const nextDuration = durations[next]
-    if (target >= duration) {
-      playlist[clock.phase] += duration
-      const over = Math.min(target - duration, nextDuration)
-      return { ...at(next, nextDuration - over, running, now), playlist }
-    }
-    playlist[next] = Math.max(0, playlist[next] - nextDuration)
-    const under = Math.min(-target, nextDuration)
-    return { ...at(next, under, running, now), playlist }
+    if (target >= 0) return { ...at(clock.phase, duration - target, running, now), playlist: clock.playlist }
+    const prev = otherPhase(clock.phase)
+    const prevDuration = durations[prev]
+    const playlist = { ...clock.playlist, [prev]: Math.max(0, clock.playlist[prev] - prevDuration) }
+    const under = Math.min(-target, prevDuration)
+    return { ...at(prev, under, running, now), playlist }
   }
 
   /**
@@ -176,12 +177,8 @@ const PomoClock = (() => {
         return clock.endsAt === null ? null : { ...clock, endsAt: null, remainingMs: remainingIn(clock, now) }
       case 'nudge':
         return nudge(clock, durations, cmd.deltaMs, now)
-      case 'skip': {
-        // Fresh: the next phase starts from the top, and this playlist keeps its place.
-        const p = otherPhase(clock.phase)
-        const playlist = { ...clock.playlist, [clock.phase]: clock.playlist[clock.phase] + elapsedIn(clock, durations, now) }
-        return { ...at(p, durations[p], clock.endsAt !== null, now), playlist }
-      }
+      case 'skip':
+        return skip(clock, durations, now)
       case 'rollover': {
         // Every device and the DO run this on their own when the end time passes.
         // It chains from the exact end, so they all land on the same next end time.
@@ -619,6 +616,17 @@ const scenarios = [
       ['Friend on a 1500 ms link', set(B, { latencyMs: 1500 })],
       ['Both join, and Em starts once both are in', joinBothThenStart],
       ['Em presses Skip phase', () => press(A, { type: 'skip' })],
+    ],
+  },
+  {
+    title: '+10s near the end',
+    durations: [20, 20],
+    text: 'Short work phase. With less than ten seconds of work left, the friend presses +10s. That would run past the end, so it starts the break fresh instead, the same as a skip.',
+    watch: 'The phone\'s break starts at 00:20 at once, with its break video at the top, not a few seconds in. Em\'s break starts 1.5 seconds later, when the press reaches the DO, also at 00:20 and at the top. The phone\'s timer then settles by about +1.5s, like any skip, so both end together.',
+    steps: [
+      ['Friend on a 1500 ms link', set(B, { latencyMs: 1500 })],
+      ['Both join, and Em starts once both are in', joinBothThenStart],
+      ['Once the clock is under 00:10: friend presses +10s', () => press(B, { type: 'nudge', deltaMs: 10_000 })],
     ],
   },
   {

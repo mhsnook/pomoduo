@@ -5,14 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Shared clock prototype</title>
 <style>
-  :root { --accent: #359fcc; --ink: #0b1f2a; --paper: #f7f9fa; --line: #d9e1e6; --soft: #6a7b85; --break: #7b2cbf; }
+  :root { --accent: #359fcc; --ink: #0b1f2a; --paper: #f7f9fa; --line: #d9e1e6; --soft: #6a7b85; --break: #7b2cbf; --warn: #b00020; }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: var(--paper); }
   main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 60px; }
   h1 { font-size: 26px; margin: 0 0 6px; }
   h2 { font-size: 16px; margin: 0 0 10px; }
   p { margin: 0 0 10px; }
-  .intro { max-width: 760px; color: #2b3b45; }
+  .intro { max-width: 800px; color: #2b3b45; }
+  .intro ul { margin: 4px 0 10px; padding-left: 20px; }
   .grid { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 16px; margin-top: 20px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
   .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
@@ -33,7 +34,6 @@
   button.step { text-align: left; display: block; width: 100%; margin: 4px 0; }
   button.step.done { opacity: 0.5; }
   button.step.next { border-color: var(--accent); box-shadow: 0 0 0 2px #359fcc33; }
-  button:disabled { opacity: 0.45; cursor: default; }
   button[hidden] { display: none; }
   label.range { display: block; font-size: 13px; color: var(--soft); margin: 6px 0 2px; }
   input[type=range] { width: 100%; }
@@ -43,9 +43,10 @@
   .video .pos { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
   .video.break .pos { background: var(--break); }
   .video .target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
-  .video .label { font-size: 12px; color: var(--soft); display: flex; justify-content: space-between; }
-  .drift { color: #b00020; }
-  .log { font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; margin: 8px 0 0; padding: 0; list-style: none; max-height: 180px; overflow: auto; }
+  .video .label { font-size: 12px; color: var(--soft); display: flex; justify-content: space-between; gap: 8px; }
+  .off { color: var(--warn); }
+  .flash { background: #fff3c4; border-radius: 4px; }
+  .log { font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; margin: 8px 0 0; padding: 0; list-style: none; max-height: 200px; overflow: auto; }
   .log li { padding: 2px 0; border-top: 1px dashed var(--line); }
   .log li b { color: var(--accent); }
   .pending { font-size: 12px; color: var(--soft); min-height: 18px; }
@@ -63,8 +64,15 @@
 <body>
 <main>
   <h1>Shared clock prototype</h1>
-  <p class="intro"><strong>The question.</strong> Two people in a session each run their own copy of the clock. Every command (start, pause, nudge, skip) goes through the session's Durable Object, which stamps it with server time and who sent it. Each device measures its offset from server time once when it connects and reads the clock through that offset. The video on each device is expected to sit at "how far into this phase we are". Does this keep two devices, with different wall clocks and different network delays, showing the same clock and the same video position? And what did the model in <code>tree/rules.md</code> get wrong?</p>
-  <p class="intro note">This page is throwaway. The middle card stands in for the Durable Object. The two outer cards stand in for two devices. Time runs for real, so set short phases to see a rollover. Nothing is saved.</p>
+  <div class="intro">
+    <p><strong>The question.</strong> Two people in a session share one clock. Does the model below keep two devices, with different wall clocks and different network delays, on the same clock and the same place in the playlist? What did <code>tree/rules.md</code> get wrong?</p>
+    <ul>
+      <li>Every command goes through the session's Durable Object, which stamps it with server time and who sent it. The DO also flips the phase itself when time runs out.</li>
+      <li>A device never reads its own wall clock. It counts with a steady timer and keeps an offset to server time. Every message from the DO carries server time, and the device corrects its offset when it is more than 100 ms off. There is no ping.</li>
+      <li>Each playlist keeps its place across pomos. A video seeks only when the clock changes, and only when it is more than half a second off. Between changes it plays on its own.</li>
+    </ul>
+  </div>
+  <p class="intro note">This page is throwaway. The middle card stands in for the Durable Object. The two outer cards stand in for two devices. Time runs for real, so the walkthroughs use short phases. Nothing is saved. Version 2: the first version measured the offset once, from the wall clock, and a clock that moved after joining stayed wrong.</p>
 
   <div class="grid">
     <section class="card" id="clientA"></section>
@@ -74,9 +82,10 @@
         <dt>Phase</dt><dd id="sPhase"></dd>
         <dt>Running</dt><dd id="sRunning"></dd>
         <dt>Ends at (server time)</dt><dd id="sEndsAt"></dd>
-        <dt>Remaining (server view)</dt><dd id="sRemaining"></dd>
-        <dt>Last command</dt><dd id="sLast"></dd>
-        <dt>Change number</dt><dd id="sSeq"></dd>
+        <dt>Remaining</dt><dd id="sRemaining"></dd>
+        <dt>Work playlist</dt><dd id="sWork"></dd>
+        <dt>Break playlist</dt><dd id="sBreak"></dd>
+        <dt>Last change</dt><dd id="sLast"></dd>
       </dl>
       <div class="buttons" style="margin-top:10px">
         <span style="font-size:13px;color:var(--soft);align-self:center">Phase lengths</span>
@@ -84,7 +93,7 @@
         break <input type="number" id="breakSec" min="5" value="20" /> s
         <button id="applyDur">Apply and reset</button>
       </div>
-      <p class="note">Rollover is the DO's job: when the end time passes it flips the phase itself, chained from the exact end time rather than from "now", so nothing drifts.</p>
+      <p class="note">A playlist's position is where it stood when its phase began, or where it stopped if its phase is not the current one.</p>
       <ul class="log" id="log"></ul>
     </section>
     <section class="card" id="clientB"></section>
@@ -100,15 +109,21 @@
 // PomoClock: the pure module. No DOM in here. This is the bit worth lifting.
 // ---------------------------------------------------------------------------
 const PomoClock = (() => {
+  /** An offset only moves when it is off by more than this. */
+  const DRIFT_MS = 100
+
   const otherPhase = (p) => (p === 'work' ? 'break' : 'work')
 
   /** What is left on the clock, whether it is counting down or stopped. */
   const remainingIn = (row, now) =>
     Math.max(0, row.endsAt === null ? row.remainingMs : row.endsAt - now)
 
-  /** How far into the current phase the clock is. This is where the video should be. */
+  /** How far into the current phase the clock is. */
   const elapsedIn = (row, durations, now) =>
     Math.max(0, durations[row.phase] - remainingIn(row, now))
+
+  /** Where the current phase's video belongs: its playlist's place at the start of the phase, plus the time since. */
+  const videoTarget = (row, durations, now) => row.playlist[row.phase] + elapsedIn(row, durations, now)
 
   const at = (phase, remainingMs, running, now) => ({
     phase,
@@ -116,23 +131,37 @@ const PomoClock = (() => {
     endsAt: running ? now + remainingMs : null,
   })
 
-  const fresh = (durations) => ({ phase: 'work', endsAt: null, remainingMs: durations.work })
+  const fresh = (durations) => ({
+    phase: 'work',
+    endsAt: null,
+    remainingMs: durations.work,
+    playlist: { work: 0, break: 0 },
+  })
 
-  /** Lifted from pomodance's scrubTimer: a nudge that runs off the end of a phase carries into the next. */
+  /**
+   * Lifted from pomodance's scrubTimer. A nudge that runs off the end of a phase
+   * carries into the next one: the phase being left runs its playlist out to the
+   * edge, and the phase being joined picks up where its playlist stopped.
+   */
   function nudge(row, durations, deltaMs, now) {
     const duration = durations[row.phase]
     const elapsed = Math.max(0, duration - remainingIn(row, now))
     const target = elapsed + deltaMs
     const running = row.endsAt !== null
-    if (target >= 0 && target < duration) return at(row.phase, duration - target, running, now)
+    const playlist = { ...row.playlist }
+    if (target >= 0 && target < duration) return { ...at(row.phase, duration - target, running, now), playlist }
     const next = otherPhase(row.phase)
     const nextDuration = durations[next]
     if (target >= duration) {
+      playlist[row.phase] += duration
       const over = Math.min(target - duration, nextDuration)
-      return at(next, nextDuration - over, running, now)
+      return { ...at(next, nextDuration - over, running, now), playlist }
     }
+    // Back past the start: this playlist stays where its phase began, and the
+    // last phase's playlist rewinds by as much as the clock does.
+    playlist[next] = Math.max(0, playlist[next] - nextDuration)
     const under = Math.min(-target, nextDuration)
-    return at(next, under, running, now)
+    return { ...at(next, under, running, now), playlist }
   }
 
   /**
@@ -155,17 +184,16 @@ const PomoClock = (() => {
         break
       case 'skip': {
         const p = otherPhase(row.phase)
-        next = at(p, durations[p], row.endsAt !== null, serverNow)
+        const playlist = { ...row.playlist, [row.phase]: videoTarget(row, durations, serverNow) }
+        next = { ...at(p, durations[p], row.endsAt !== null, serverNow), playlist }
         break
       }
-      case 'reset':
-        next = fresh(durations)
-        break
       case 'rollover': {
-        // Only the DO sends this, from its alarm. Chain from the exact end so nothing drifts.
+        // Only the DO sends this, from its alarm. Chain from the exact end so a late alarm adds no drift.
         if (row.endsAt === null || row.endsAt > serverNow) return null
         const p = otherPhase(row.phase)
-        next = { phase: p, remainingMs: durations[p], endsAt: row.endsAt + durations[p] }
+        const playlist = { ...row.playlist, [row.phase]: row.playlist[row.phase] + durations[row.phase] }
+        next = { phase: p, remainingMs: durations[p], endsAt: row.endsAt + durations[p], playlist }
         break
       }
       default:
@@ -174,130 +202,163 @@ const PomoClock = (() => {
     return { ...next, seq: row.seq + 1, by, at: serverNow, cmd: cmd.type }
   }
 
-  /** Client side. One round trip gives the offset to add to local time to get server time. */
-  function measureOffset(sentAtLocal, serverAt, receivedAtLocal) {
-    const rtt = receivedAtLocal - sentAtLocal
-    return serverAt + rtt / 2 - receivedAtLocal
+  // ---- a device's view of server time ----
+  // `steadyNow` is performance.now() in a browser: it never jumps when the
+  // device corrects its wall clock. The wall clock is never read.
+
+  const serverNowOf = (sync, steadyNow) => steadyNow + sync.offset
+
+  /** Joining: one round trip gives the first offset. */
+  function firstSync(sentAt, serverAt, receivedAt) {
+    const rtt = receivedAt - sentAt
+    return { offset: serverAt + rtt / 2 - receivedAt, rtt, lastCorrection: null }
   }
 
-  const localRemaining = (row, localNow, offset) => remainingIn(row, localNow + offset)
-  const videoTarget = (row, durations, localNow, offset) => elapsedIn(row, durations, localNow + offset)
+  /**
+   * Every message from the DO carries server time. A reply to something this
+   * device sent is a fresh round trip, so it gives a fresh measurement. Any
+   * other message can only show that this device has fallen behind, because
+   * the DO stamped it before it arrived. Either way the offset moves only when
+   * it is off by more than DRIFT_MS.
+   */
+  function resync(sync, { serverAt, receivedAt, sentAt }) {
+    let rtt = sync.rtt
+    if (sentAt != null) rtt = receivedAt - sentAt
+    else if (serverAt - (receivedAt + sync.offset) <= DRIFT_MS) return sync
+    const measured = serverAt + rtt / 2 - receivedAt
+    if (Math.abs(measured - sync.offset) <= DRIFT_MS) return { ...sync, rtt }
+    return { offset: measured, rtt, lastCorrection: measured - sync.offset }
+  }
 
-  return { otherPhase, remainingIn, elapsedIn, fresh, apply, measureOffset, localRemaining, videoTarget }
+  return { DRIFT_MS, otherPhase, remainingIn, elapsedIn, videoTarget, fresh, apply, serverNowOf, firstSync, resync }
 })()
 
 // ---------------------------------------------------------------------------
-// The simulation shell. Throwaway. Real time, simulated skew and latency.
+// The simulation shell. Throwaway. Real time, simulated clocks and latency.
 // ---------------------------------------------------------------------------
 const SEEK_TOLERANCE_MS = 500
 let durations = { work: 60_000, break: 20_000 }
 
-const server = {
-  row: { ...PomoClock.fresh(durations), seq: 0, by: null, at: null, cmd: null },
-  now: () => Date.now(),
-  log: [],
-}
+const server = { row: null, now: () => Date.now(), log: [] }
 
 function makeClient(id, name) {
   return {
     id, name,
-    skewMs: 0,          // this device's wall clock minus true time
-    latencyMs: 0,       // one way
-    offset: null,       // measured; null means not connected
-    connected: false,
-    row: null,          // last row received from the DO
-    video: { work: 0, break: 0, playing: false, lastTick: null }, // ms position per phase
+    skewMs: 0,        // wall clock minus true time: the device never reads it for the session
+    steadyLagMs: 0,   // how much the steady timer has lost, as a suspended tab can
+    latencyMs: 0,     // one way
+    subscribed: false, // the DO sends this device rows
+    sync: null,       // offset from steady timer to server time; null means not connected
+    row: null,        // last row received from the DO
+    video: { work: 0, break: 0, playing: false, lastTick: null },
     seeks: 0,
     pending: 0,
-    now() { return Date.now() + this.skewMs },
+    flashUntil: 0,
+    wall() { return Date.now() + this.skewMs },
+    steady() { return Date.now() + this.steadyLagMs },
   }
 }
 const clients = { A: makeClient('A', 'Em on a laptop'), B: makeClient('B', 'Friend on a phone') }
+const A = clients.A, B = clients.B
+const connected = (c) => c.sync !== null
 
 function logLine(text) {
-  server.log.unshift(`${fmtServerTime(server.now())}  ${text}`)
+  server.log.unshift(`${fmtTime(server.now())}  ${text}`)
   server.log = server.log.slice(0, 40)
 }
 
-function broadcast(row) {
-  for (const c of Object.values(clients)) {
-    if (!c.connected) continue
-    setTimeout(() => { c.row = row; syncVideo(c) }, c.latencyMs)
+/** A message from the DO lands on a device: correct the offset first, then take the row. */
+function receive(c, { serverAt, sentAt, row }) {
+  if (!connected(c)) return
+  const before = c.sync
+  c.sync = PomoClock.resync(c.sync, { serverAt, receivedAt: c.steady(), sentAt })
+  if (c.sync !== before && c.sync.lastCorrection !== before.lastCorrection) {
+    c.flashUntil = Date.now() + 2500
+    logLine(`${c.name} corrected its offset by ${fmtSigned(c.sync.lastCorrection)}`)
+  }
+  if (row) take(c, row)
+}
+
+/** A new row: seek the video if it is more than the tolerance off. This is the only place a video seeks. */
+function take(c, row) {
+  if (c.row && row.seq <= c.row.seq) return
+  c.row = row
+  const target = PomoClock.videoTarget(row, durations, PomoClock.serverNowOf(c.sync, c.steady()))
+  c.video.playing = row.endsAt !== null
+  if (Math.abs(c.video[row.phase] - target) > SEEK_TOLERANCE_MS) {
+    c.video[row.phase] = target
+    c.seeks++
   }
 }
 
-/** A client sends a command. It travels, the DO stamps it, the row fans out. */
-function send(client, cmd) {
-  if (!client.connected) { toast(`${client.name} is not in the session`); return }
-  client.pending++
-  render()
-  setTimeout(() => {
-    const next = PomoClock.apply(server.row, cmd, durations, server.now(), client.name)
-    if (next) {
-      server.row = next
-      logLine(`${cmd.type}${cmd.deltaMs ? ' ' + (cmd.deltaMs > 0 ? '+' : '') + cmd.deltaMs / 1000 + 's' : ''} by ${client.name} → change #${next.seq}`)
-      broadcast(next)
-    } else {
-      logLine(`${cmd.type} by ${client.name} changed nothing`)
-    }
-    setTimeout(() => { client.pending--; }, client.latencyMs)
-  }, client.latencyMs)
+function broadcast(row, except) {
+  for (const c of Object.values(clients)) {
+    if (c === except || !c.subscribed) continue
+    setTimeout(() => receive(c, { serverAt: row.at, row }), c.latencyMs)
+  }
 }
 
-/** Connect: one round trip measures the offset, then the current row arrives. */
-function join(client) {
-  const sentAt = client.now()
-  client.pending++
+/** A device sends a command. The DO stamps it, replies to the sender, and fans the row out. */
+function send(c, cmd) {
+  if (!connected(c)) { toast(`${c.name} is not in the session`); return }
+  const sentAt = c.steady()
+  c.pending++
+  setTimeout(() => {
+    const serverAt = server.now()
+    const next = PomoClock.apply(server.row, cmd, durations, serverAt, c.name)
+    if (next) {
+      server.row = next
+      logLine(`${cmd.type}${cmd.deltaMs ? ' ' + (cmd.deltaMs > 0 ? '+' : '') + cmd.deltaMs / 1000 + 's' : ''} by ${c.name} → change #${next.seq}`)
+      broadcast(next, c)
+    } else {
+      logLine(`${cmd.type} by ${c.name} changed nothing`)
+    }
+    setTimeout(() => { c.pending--; receive(c, { serverAt, sentAt, row: next }) }, c.latencyMs)
+  }, c.latencyMs)
+}
+
+/** Joining: one round trip measures the offset, and the current row arrives with it. */
+function join(c) {
+  const sentAt = c.steady()
+  c.pending++
   setTimeout(() => {
     const serverAt = server.now()
     const row = server.row
+    c.subscribed = true
     setTimeout(() => {
-      const receivedAt = client.now()
-      client.offset = PomoClock.measureOffset(sentAt, serverAt, receivedAt)
-      client.connected = true
-      client.row = row
-      client.pending--
-      syncVideo(client)
-      logLine(`${client.name} joined, offset ${fmtSigned(client.offset)}`)
-    }, client.latencyMs)
-  }, client.latencyMs)
+      c.pending--
+      c.sync = PomoClock.firstSync(sentAt, serverAt, c.steady())
+      c.row = null
+      take(c, row)
+      logLine(`${c.name} joined`)
+    }, c.latencyMs)
+  }, c.latencyMs)
 }
 
-function leave(client) {
-  client.connected = false
-  client.row = null
-  client.offset = null
-  client.video.playing = false
-  logLine(`${client.name} left`)
+function leave(c) {
+  c.subscribed = false
+  c.sync = null
+  c.row = null
+  c.video.playing = false
+  logLine(`${c.name} left`)
 }
 
-/** After any row arrives: switch phase if needed, and seek if the video is more than the tolerance off. */
-function syncVideo(client) {
-  const r = client.row
-  if (!r) return
-  const target = PomoClock.videoTarget(r, durations, client.now(), client.offset)
-  const v = client.video
-  v.playing = r.endsAt !== null
-  if (Math.abs(v[r.phase] - target) > SEEK_TOLERANCE_MS) {
-    v[r.phase] = target
-    client.seeks++
-  }
+function hiccup(c) {
+  c.steadyLagMs -= 2000
+  logLine(`${c.name}'s timer lost 2 s (nothing sent)`)
 }
 
-/** Server alarm: the DO flips the phase when the end time passes. */
+/** The DO's alarm: flip the phase when the end time passes. */
 setInterval(() => {
-  const r = server.row
-  if (r.endsAt !== null && r.endsAt <= server.now()) {
-    const next = PomoClock.apply(r, { type: 'rollover' }, durations, server.now(), 'the clock')
-    if (next) {
-      server.row = next
-      logLine(`rollover to ${next.phase} → change #${next.seq}`)
-      broadcast(next)
-    }
+  const next = PomoClock.apply(server.row, { type: 'rollover' }, durations, server.now(), 'the clock')
+  if (next) {
+    server.row = next
+    logLine(`rollover to ${next.phase} → change #${next.seq}`)
+    broadcast(next, null)
   }
 }, 100)
 
-/** Each device's video plays on its own. It only moves toward the target when a row arrives. */
+/** Each device's video plays on its own, in real time, between changes. */
 setInterval(() => {
   const t = Date.now()
   for (const c of Object.values(clients)) {
@@ -313,7 +374,8 @@ setInterval(() => {
 // ---------------------------------------------------------------------------
 const pad = (n) => String(n).padStart(2, '0')
 function fmtClock(ms) { const s = Math.ceil(Math.max(0, ms) / 1000); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}` }
-function fmtServerTime(ms) { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, '0')}` }
+function fmtPos(ms) { const s = Math.floor(Math.max(0, ms) / 1000); return `${Math.floor(s / 60)}:${pad(s % 60)}` }
+function fmtTime(ms) { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, '0')}` }
 function fmtSigned(ms) { return `${ms >= 0 ? '+' : ''}${(ms / 1000).toFixed(2)}s` }
 
 function buildClient(c) {
@@ -323,15 +385,16 @@ function buildClient(c) {
     <div data-f="phase"></div>
     <div class="clock" data-f="clock">--:--</div>
     <dl class="kv">
-      <dt>Device wall clock</dt><dd data-f="wall"></dd>
-      <dt>Offset to server</dt><dd data-f="offset"></dd>
-      <dt>If it ignored the offset</dt><dd data-f="naive"></dd>
+      <dt>Wall clock</dt><dd data-f="wall"></dd>
+      <dt>If it read its wall clock</dt><dd data-f="naive"></dd>
+      <dt>Timer lost so far</dt><dd data-f="lag"></dd>
+      <dt>Last offset correction</dt><dd data-f="corr"></dd>
       <dt>Last change seen</dt><dd data-f="last"></dd>
     </dl>
     <div class="video" data-f="video">
       <div class="label"><span data-f="vname"></span><span data-f="vpos"></span></div>
       <div class="bar"><div class="pos" data-f="vbar"></div><div class="target" data-f="vtarget"></div></div>
-      <div class="label"><span>bar is the video, tick is where the clock says it should be</span><span data-f="seeks"></span></div>
+      <div class="label"><span>bar is the video, tick is where the clock says it belongs</span><span data-f="seeks"></span></div>
     </div>
     <div class="buttons">
       <button class="primary" data-act="start">Start</button>
@@ -342,9 +405,10 @@ function buildClient(c) {
       <button data-act="join" class="primary">Join session</button>
       <button data-act="leave">Leave</button>
     </div>
+    <div class="buttons"><button data-act="hiccup">Timer hiccup: lose 2 s</button></div>
     <div class="pending" data-f="pending"></div>
     <label class="range" data-f="skewLabel"></label>
-    <input type="range" min="-10000" max="10000" step="250" value="0" data-skew />
+    <input type="range" min="-60000" max="60000" step="500" value="0" data-skew />
     <label class="range" data-f="latLabel"></label>
     <input type="range" min="0" max="3000" step="50" value="0" data-lat />
   `
@@ -357,33 +421,37 @@ function buildClient(c) {
 
 function renderClient(c) {
   const el = c.el
-  el.classList.toggle('gone', !c.connected)
+  el.classList.toggle('gone', !connected(c))
   const r = c.row
-  const remaining = r ? PomoClock.localRemaining(r, c.now(), c.offset) : null
-  const target = r ? PomoClock.videoTarget(r, durations, c.now(), c.offset) : 0
+  const now = r ? PomoClock.serverNowOf(c.sync, c.steady()) : 0
   const phase = r ? r.phase : 'work'
-  const vpos = c.video[phase]
-  const drift = r ? vpos - target : 0
   const dur = durations[phase]
-  const naive = r ? PomoClock.remainingIn(r, c.now()) : null // what a device would show if it ignored the offset
+  const start = r ? r.playlist[phase] : 0
+  const target = r ? PomoClock.videoTarget(r, durations, now) : 0
+  const vpos = c.video[phase]
+  const off = r ? vpos - target : 0
   c.f('phase').innerHTML = r
     ? `<span class="phase ${phase}">${phase}</span>${r.endsAt === null ? '<span class="stopped">stopped</span>' : ''}`
     : '<span class="note">not in the session</span>'
-  c.f('clock').textContent = r ? fmtClock(remaining) : '--:--'
-  c.f('wall').textContent = `${fmtServerTime(c.now())} (${fmtSigned(c.skewMs)} from true)`
-  c.f('offset').textContent = c.offset === null ? 'not measured' : fmtSigned(c.offset)
-  c.f('naive').textContent = naive === null ? '' : fmtClock(naive)
-  c.f('last').textContent = r ? `#${r.seq} ${r.cmd} by ${r.by}` : ''
+  c.f('clock').textContent = r ? fmtClock(PomoClock.remainingIn(r, now)) : '--:--'
+  c.f('wall').textContent = `${fmtTime(c.wall())} (${fmtSigned(c.skewMs)} from true)`
+  c.f('naive').textContent = r ? fmtClock(PomoClock.remainingIn(r, c.wall())) : ''
+  c.f('lag').textContent = c.steadyLagMs ? fmtSigned(c.steadyLagMs) : 'nothing'
+  c.f('corr').textContent = !c.sync ? '' : c.sync.lastCorrection === null ? 'none yet' : fmtSigned(c.sync.lastCorrection)
+  c.f('corr').classList.toggle('flash', Date.now() < c.flashUntil)
+  c.f('last').textContent = r ? `#${r.seq} ${r.cmd ?? 'start of session'}${r.by ? ' by ' + r.by : ''}` : ''
   c.f('video').className = `video ${phase}`
-  c.f('vname').textContent = `${phase} video`
-  c.f('vpos').innerHTML = `${(vpos / 1000).toFixed(1)}s of ${dur / 1000}s${Math.abs(drift) > SEEK_TOLERANCE_MS ? ` <span class="drift">off by ${fmtSigned(drift)}</span>` : ''}`
-  c.f('vbar').style.width = `${Math.min(100, (vpos / dur) * 100)}%`
-  c.f('vtarget').style.left = `${Math.min(100, (target / dur) * 100)}%`
+  c.f('vname').textContent = `${phase} playlist at ${fmtPos(vpos)}`
+  c.f('vpos').innerHTML = Math.abs(off) > SEEK_TOLERANCE_MS
+    ? `<span class="off">off by ${fmtSigned(off)}, fixed at the next change</span>`
+    : `${fmtPos(vpos - start)} into this phase`
+  c.f('vbar').style.width = `${Math.max(0, Math.min(100, ((vpos - start) / dur) * 100))}%`
+  c.f('vtarget').style.left = `${Math.max(0, Math.min(100, ((target - start) / dur) * 100))}%`
   c.f('seeks').textContent = `seeks: ${c.seeks}`
-  el.querySelector('[data-act="join"]').hidden = c.connected
-  el.querySelector('[data-act="leave"]').hidden = !c.connected
+  el.querySelector('[data-act="join"]').hidden = connected(c)
+  el.querySelector('[data-act="leave"]').hidden = !connected(c)
   c.f('pending').textContent = c.pending > 0 ? `${c.pending} message${c.pending > 1 ? 's' : ''} in flight` : ''
-  c.f('skewLabel').textContent = `Device clock skew: ${fmtSigned(c.skewMs)}`
+  c.f('skewLabel').textContent = `Wall clock skew: ${fmtSigned(c.skewMs)}`
   c.f('latLabel').textContent = `Network delay each way: ${c.latencyMs} ms`
   const sk = el.querySelector('[data-skew]'), la = el.querySelector('[data-lat]')
   if (document.activeElement !== sk) sk.value = c.skewMs
@@ -399,6 +467,7 @@ function act(c, name) {
     case 'skip': return send(c, { type: 'skip' })
     case 'join': return join(c)
     case 'leave': return leave(c)
+    case 'hiccup': return hiccup(c)
   }
 }
 
@@ -407,23 +476,31 @@ function render() {
   const r = server.row
   document.getElementById('sPhase').innerHTML = `<span class="phase ${r.phase}">${r.phase}</span>`
   document.getElementById('sRunning').textContent = r.endsAt === null ? 'no, stopped' : 'yes'
-  document.getElementById('sEndsAt').textContent = r.endsAt === null ? '' : fmtServerTime(r.endsAt)
+  document.getElementById('sEndsAt').textContent = r.endsAt === null ? '' : fmtTime(r.endsAt)
   document.getElementById('sRemaining').textContent = fmtClock(PomoClock.remainingIn(r, server.now()))
-  document.getElementById('sLast').textContent = r.cmd ? `${r.cmd} by ${r.by} at ${fmtServerTime(r.at)}` : 'none yet'
-  document.getElementById('sSeq').textContent = `#${r.seq}`
+  document.getElementById('sWork').textContent = fmtPos(r.playlist.work)
+  document.getElementById('sBreak').textContent = fmtPos(r.playlist.break)
+  document.getElementById('sLast').textContent = r.cmd ? `#${r.seq} ${r.cmd} by ${r.by} at ${fmtTime(r.at)}` : 'none yet'
   document.getElementById('log').innerHTML = server.log.map((l) => `<li>${l.replace(/→ (change #\d+)/, '→ <b>$1</b>')}</li>`).join('')
 }
 
+function setDurations(workS, breakS) {
+  document.getElementById('workSec').value = workS
+  document.getElementById('breakSec').value = breakS
+  durations = { work: workS * 1000, break: breakS * 1000 }
+}
+
 document.getElementById('applyDur').addEventListener('click', () => {
-  durations = { work: Number(document.getElementById('workSec').value) * 1000, break: Number(document.getElementById('breakSec').value) * 1000 }
+  setDurations(Number(document.getElementById('workSec').value), Number(document.getElementById('breakSec').value))
   resetAll()
 })
 
+/** A known starting point: fresh clock, both devices out, every device setting back to zero. */
 function resetAll() {
   server.row = { ...PomoClock.fresh(durations), seq: 0, by: null, at: null, cmd: null }
   server.log = []
   for (const c of Object.values(clients)) {
-    c.connected = false; c.row = null; c.offset = null; c.seeks = 0; c.pending = 0
+    Object.assign(c, { skewMs: 0, steadyLagMs: 0, latencyMs: 0, subscribed: false, sync: null, row: null, seeks: 0, pending: 0, flashUntil: 0 })
     c.video = { work: 0, break: 0, playing: false, lastTick: null }
   }
   logLine('reset')
@@ -436,30 +513,69 @@ function toast(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Guided walkthroughs. Each step is a real button.
+// Guided walkthroughs. Each step is a real button. The first step resets.
 // ---------------------------------------------------------------------------
-const A = clients.A, B = clients.B
-const set = (c, skew, lat) => () => { c.skewMs = skew; c.latencyMs = lat; toast(`${c.name}: skew ${fmtSigned(skew)}, delay ${lat} ms`) }
+const set = (c, props) => () => Object.assign(c, props)
 const both = (...fns) => () => fns.forEach((f) => f())
+const later = (ms, fn) => () => setTimeout(fn, ms)
 
 const scenarios = [
   {
-    title: 'Same clock, different watches',
-    text: 'The friend\'s phone has a wall clock three seconds fast. Both join, Em starts. Both count down together, and the "if it ignored the offset" line shows what the phone would display without the fix.',
-    watch: 'Both big clocks match. The phone\'s naive line runs three seconds ahead. The DO row never mentions either device\'s clock.',
+    title: 'A wall clock that jumps mid-session',
+    durations: [15, 20],
+    text: 'This is what broke version 1. Em joins with an exact clock, the friend joins on a slow link, Em starts. Then Em\'s wall clock jumps 3.5 seconds slow, the way a laptop can when it corrects its time. Pause and start again.',
+    watch: 'Nothing happens. Both big clocks stay together, before and after the pause, and into the break. Only the "if it read its wall clock" line moves, which is the version 1 bug, now just a number nobody uses.',
     steps: [
-      ['Set Em: exact clock, 100 ms delay. Set friend: +3 s fast, 400 ms delay', both(set(A, 0, 100), set(B, 3000, 400))],
-      ['Em joins', () => join(A)],
-      ['Friend joins', () => join(B)],
+      ['Friend on an 800 ms link', set(B, { latencyMs: 800 })],
+      ['Both join', both(() => join(A), () => join(B))],
+      ['Em presses Start', () => send(A, { type: 'start' })],
+      ['Em\'s wall clock jumps to −3.5 s', set(A, { skewMs: -3500 })],
+      ['Em pauses', () => send(A, { type: 'pause' })],
       ['Em presses Start', () => send(A, { type: 'start' })],
     ],
   },
   {
-    title: 'Pause and nudge cross in the post',
-    text: 'Em pauses at the same moment the friend pushes the clock forward ten seconds. The friend is on a slow link, so the DO gets Em\'s pause first. Whatever order they land in, the DO applies them in that order and both devices end up showing the same thing.',
-    watch: 'The log shows the order the DO chose. Both devices show a stopped clock, ten seconds further on than where Em paused. Neither device applied its own command locally first.',
+    title: 'A tab that fell behind',
+    durations: [60, 20],
+    text: 'A phone suspends the tab, and when it comes back its steady timer has lost two seconds. Nothing tells the phone yet. Then Em nudges the clock, and that message is enough for the phone to notice and correct.',
+    watch: 'After the hiccup, the phone\'s clock reads two seconds more than Em\'s. When Em\'s nudge arrives, "Last offset correction" flashes about +2.00s and the clocks meet. The phone\'s video seeks with the nudge and lands in the right place.',
     steps: [
-      ['Set Em: 100 ms delay. Set friend: 1500 ms delay', both(set(A, 0, 100), set(B, 0, 1500))],
+      ['Friend on a 300 ms link', set(B, { latencyMs: 300 })],
+      ['Both join, Em starts', () => { join(A); join(B); setTimeout(() => send(A, { type: 'start' }), 800) }],
+      ['The phone\'s timer loses 2 s', () => hiccup(B)],
+      ['Em presses +10s', () => send(A, { type: 'nudge', deltaMs: 10_000 })],
+    ],
+  },
+  {
+    title: 'The playlist picks up where it left off',
+    durations: [10, 8],
+    text: 'Short phases, and nobody touches anything. The DO rolls the phase over on its own. Each playlist keeps its place: the second work phase starts ten seconds into the work playlist, not at zero.',
+    watch: 'On the DO, the work playlist reads 0:10 after the first rollover and 0:20 after the third. Each rollover is "by the clock", and each end time is exactly one phase after the last.',
+    steps: [
+      ['Friend on a 600 ms link', set(B, { latencyMs: 600 })],
+      ['Both join', both(() => join(A), () => join(B))],
+      ['Em presses Start, then wait about 30 seconds', () => send(A, { type: 'start' })],
+    ],
+  },
+  {
+    title: 'A video that buffered',
+    durations: [60, 20],
+    text: 'The phone\'s video stalls for three seconds while it buffers. Nobody corrects it while it plays. It stays behind until the next change, and then it seeks.',
+    watch: 'The phone\'s bar trails its tick and reads "off by −3.00s" until Em pauses. On the pause it seeks, and both bars sit on their ticks.',
+    steps: [
+      ['Friend on a 300 ms link', set(B, { latencyMs: 300 })],
+      ['Both join, Em starts', () => { join(A); join(B); setTimeout(() => send(A, { type: 'start' }), 800) }],
+      ['The phone\'s video buffers for 3 s', () => { B.video.playing = false; setTimeout(() => { if (B.row && B.row.endsAt !== null) B.video.playing = true }, 3000) }],
+      ['Em pauses', () => send(A, { type: 'pause' })],
+    ],
+  },
+  {
+    title: 'Pause and nudge cross in the post',
+    durations: [60, 20],
+    text: 'Em pauses at the same moment the friend pushes the clock forward ten seconds. The friend is on a slow link, so the DO gets Em\'s pause first. Devices apply nothing locally, so the friend\'s own press takes a full round trip to show.',
+    watch: 'The log shows the order the DO chose. Both devices end on a stopped clock, ten seconds further on than where Em paused. Notice how long the friend\'s +10s takes to appear on the friend\'s own screen.',
+    steps: [
+      ['Em on a 100 ms link, friend on 1500 ms', both(set(A, { latencyMs: 100 }), set(B, { latencyMs: 1500 }))],
       ['Both join', both(() => join(A), () => join(B))],
       ['Em presses Start', () => send(A, { type: 'start' })],
       ['At once: Em pauses, friend presses +10s', both(() => send(A, { type: 'pause' }), () => send(B, { type: 'nudge', deltaMs: 10_000 }))],
@@ -467,10 +583,11 @@ const scenarios = [
   },
   {
     title: 'A nudge that runs into the break',
-    text: 'Set work to 15 seconds so the end is near. Start, then push forward past the end. The nudge carries into the break, as pomodance\'s scrub does, and both videos switch to the break video and seek to where the break already is.',
-    watch: 'The phase pill turns to break on the DO and both devices. Each device\'s seek count goes up by one. The break video starts a few seconds in, not at zero.',
+    durations: [15, 20],
+    text: 'Start, then push forward past the end of work. The nudge carries into the break, as pomodance\'s scrub does. The work playlist runs out to the end of the phase, and the break playlist picks up where it last stopped.',
+    watch: 'The phase turns to break on the DO and both devices. The work playlist on the DO reads 0:15. Both break videos start a few seconds in, not at zero.',
     steps: [
-      ['Set work 15 s, break 20 s (this resets the room)', () => { document.getElementById('workSec').value = 15; document.getElementById('breakSec').value = 20; durations = { work: 15_000, break: 20_000 }; resetAll() }],
+      ['Friend on a 400 ms link', set(B, { latencyMs: 400 })],
       ['Both join', both(() => join(A), () => join(B))],
       ['Em presses Start', () => send(A, { type: 'start' })],
       ['Friend presses +10s twice', () => { send(B, { type: 'nudge', deltaMs: 10_000 }); setTimeout(() => send(B, { type: 'nudge', deltaMs: 10_000 }), 300) }],
@@ -478,34 +595,13 @@ const scenarios = [
   },
   {
     title: 'Joining mid-phase',
-    text: 'Em starts alone. Ten seconds later the friend joins on a phone whose clock is five seconds slow. The friend gets the row, measures an offset, and the video seeks straight to where the clock says it is.',
-    watch: 'The friend\'s clock lands in step at once, with no drift. The friend\'s video jumps to Em\'s position on the first tick, and the seek count reads 1.',
+    durations: [60, 20],
+    text: 'Em starts alone. A while later the friend joins on a phone whose wall clock is a full minute slow. The friend gets the row and one round trip, and the video seeks straight to where the clock says it belongs.',
+    watch: 'The friend\'s clock lands in step at once. The friend\'s video jumps to Em\'s position, and the seek count reads 1. The wall clock being a minute out makes no difference.',
     steps: [
-      ['Set friend: −5 s slow, 800 ms delay', set(B, -5000, 800)],
-      ['Em joins and starts', () => { join(A); setTimeout(() => send(A, { type: 'start' }), 400) }],
+      ['Friend\'s wall clock −60 s, 800 ms link', set(B, { skewMs: -60_000, latencyMs: 800 })],
+      ['Em joins and starts', () => { join(A); setTimeout(() => send(A, { type: 'start' }), 300) }],
       ['Wait about ten seconds, then: friend joins', () => join(B)],
-    ],
-  },
-  {
-    title: 'Nobody touches it: the rollover',
-    text: 'Set work to 10 seconds and break to 10 seconds, start, and take your hands off. The DO flips the phase itself when the end time passes, chaining each phase from the exact end of the last, so a long session never drifts by the alarm\'s lateness.',
-    watch: 'The log shows "rollover" by "the clock", not by a device. The end time of each phase is exactly ten seconds after the previous one. Both devices switch videos together.',
-    steps: [
-      ['Set work 10 s, break 10 s (this resets the room)', () => { document.getElementById('workSec').value = 10; document.getElementById('breakSec').value = 10; durations = { work: 10_000, break: 10_000 }; resetAll() }],
-      ['Set friend: +2 s fast, 600 ms delay', set(B, 2000, 600)],
-      ['Both join', both(() => join(A), () => join(B))],
-      ['Em presses Start, then wait 30 seconds', () => send(A, { type: 'start' })],
-    ],
-  },
-  {
-    title: 'Leave and come back',
-    text: 'The friend leaves mid-work and comes back a while later with a different clock skew, as if the phone slept. On return the offset is measured again. Nothing from the earlier visit is trusted.',
-    watch: 'After rejoining, the friend\'s clock and video match Em\'s at once. The old offset is gone; the new one reflects the new skew.',
-    steps: [
-      ['Both join, Em starts', () => { join(A); join(B); setTimeout(() => send(A, { type: 'start' }), 500) }],
-      ['Friend leaves', () => leave(B)],
-      ['Phone slept: set friend −8 s slow, 300 ms delay', set(B, -8000, 300)],
-      ['Friend rejoins', () => join(B)],
     ],
   },
 ]
@@ -514,12 +610,17 @@ function buildScenarios() {
   const tabs = document.getElementById('tabs'), host = document.getElementById('scenarios')
   scenarios.forEach((s, i) => {
     const tab = document.createElement('button'); tab.textContent = s.title; tab.addEventListener('click', () => showScenario(i)); tabs.appendChild(tab)
-    const div = document.createElement('div'); div.className = 'scenario'; div.id = 'scenario' + i
-    div.innerHTML = `<div><p><strong>${s.title}.</strong> ${s.text}</p><p class="watch"><strong>Watch for:</strong> ${s.watch}</p></div><div><p class="note">Press these in order. The first press resets the room.</p><div class="steps"></div></div>`
+    const div = document.createElement('div'); div.className = 'scenario'
+    div.innerHTML = `<div><p><strong>${s.title}.</strong> ${s.text}</p><p class="watch"><strong>Watch for:</strong> ${s.watch}</p></div><div><p class="note">Press these in order. The first press resets the room to work ${s.durations[0]} s, break ${s.durations[1]} s.</p><div class="steps"></div></div>`
     const steps = div.querySelector('.steps')
     s.steps.forEach((st, j) => {
       const b = document.createElement('button'); b.className = 'step'; b.textContent = `${j + 1}. ${st[0]}`
-      b.addEventListener('click', () => { if (j === 0) resetAll(); st[1](); steps.querySelectorAll('.step').forEach((x, k) => { x.classList.toggle('done', k <= j); x.classList.toggle('next', k === j + 1) }); render() })
+      b.addEventListener('click', () => {
+        if (j === 0) { setDurations(...s.durations); resetAll() }
+        st[1]()
+        steps.querySelectorAll('.step').forEach((x, k) => { x.classList.toggle('done', k <= j); x.classList.toggle('next', k === j + 1) })
+        render()
+      })
       steps.appendChild(b)
     })
     host.appendChild(div)

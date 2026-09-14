@@ -18,6 +18,11 @@ _Avoid_: task, goal
 A person's list of pomos for a work day. Work days roll over at 4am.
 _Avoid_: history, log
 
+**Playlist**:
+The videos that play during one phase. Each phase has one, and it keeps its
+place across pomos.
+_Avoid_: soundtrack, music
+
 **Session**:
 A shared clock and the people on it. Starts as a call between friends.
 _Avoid_: room, lobby

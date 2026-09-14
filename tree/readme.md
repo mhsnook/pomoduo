@@ -77,7 +77,13 @@ the product; the pair is.
   user-owned tables holds pomos and settings, so a person is the same on
   every device.
 - [Keeping clocks in step](rules.md#keeping-clocks-in-step): the DO stamps
-  every command with server time; the video seeks with the clock.
+  every command and flips the phase; devices count with a steady timer and
+  correct drift over 100 ms from messages they already get. No ping.
+- [Playlists keep their place](rules.md#playlists-keep-their-place): each
+  playlist carries on across pomos, and the clock row holds its place.
+- [Videos seek only at changes](rules.md#videos-seek-only-at-changes): a
+  video seeks on start, pause, nudge, skip, a new phase, or joining, and
+  otherwise plays on its own.
 - [The call](rules.md#voice): opens at session start, on a yap break, and on
   a knock; closes when work starts; cuts on "3, 2, 1, beep" at the end of a
   break.

@@ -19,26 +19,31 @@ Question: does the clock feel shared, and does the video stay with it when
 someone nudges? What did the model in the tree get wrong?
 
 Asset: `prototypes/shared-clock.html` on the `prototype/shared-clock` branch.
-One file, double-click to open. Two simulated devices with adjustable clock
-skew and network delay, a simulated Durable Object between them, real time,
-and six guided walkthroughs. The pure module inside it, `PomoClock`, is the
-part worth lifting.
+One file, double-click to open. Two simulated devices with adjustable wall
+clocks, timer hiccups, and network delay, a simulated Durable Object between
+them, real time, and seven guided walkthroughs. The pure module inside it,
+`PomoClock`, is the part worth lifting.
 
-Found while building, not yet decided:
+Version 1 surfaced these, and each is now a rule:
 
-- The video follows the clock by target position (how far into the phase we
-  are), not by a delta per command. One rule covers nudge, skip, join
-  mid-phase, and rollover, and it needs no seek bookkeeping. The tree's
-  wording of "seek by the same delta" should change to this.
-- Rollover is the DO's job. When the end time passes, the DO flips the phase
-  from its alarm and chains the next end time from the exact old end, not
-  from "now". The tree never said who flips the phase.
+- A wall clock that moved after joining left a stale offset. The laptop read
+  3.5 s wrong, a pause hid it, and the next break counted down from 23.5 s.
+  See [Keeping clocks in step](rules.md#keeping-clocks-in-step).
+- The video followed the time into the phase, so every phase restarted the
+  song. See [Playlists keep their place](rules.md#playlists-keep-their-place).
+- Nobody had said when videos seek. See
+  [Videos seek only at changes](rules.md#videos-seek-only-at-changes).
+- Nobody had said who flips the phase. The DO does, from its alarm.
+
+A display cap at the phase length was considered and dropped. Pomodance's
+"longer" button makes a phase legitimately longer than its length, and with
+the offset corrected the cap has nothing left to hide.
+
+Still open in version 2:
+
 - Devices apply nothing locally. They show only the row the DO sent back, so
-  on a slow link your own press lags by a round trip. Scenario two is where
-  to feel whether that is fine or whether commands need to apply
-  optimistically. If they do, the DO's row still wins on arrival.
-- A device that reconnects measures its offset again and trusts nothing from
-  before. A phone that slept is the case.
+  on a slow link your own press lags by a round trip. The walkthrough "Pause
+  and nudge cross in the post" is where to feel whether that is fine.
 - The real transport is not tested here. That is the first implementation,
   not a prototype.
 

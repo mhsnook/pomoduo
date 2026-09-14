@@ -25,7 +25,8 @@ is the same person on every device.
 Party-db, and the room is the session. Everything shared is a row in the
 session's collections:
 
-- the clock, as one row (phase, end time, remaining time, who, when);
+- the clock, as one row (phase, end time, remaining time, each playlist's
+  place, who, when);
 - members, with intention, mic state, presence, and vote weight;
 - votes for the current pomo;
 - chat messages, with a held flag the client honours;

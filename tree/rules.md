@@ -7,21 +7,49 @@ concepts, never the current word for them: see the word pairs at the end.
 
 One shared clock per session. It has a phase (work or break), and either an
 end time (running) or a remaining time (stopped), exactly as pomodance models
-its timer. The commands (start, pause, nudge, scrub, skip) are shared; each
+its timer. It also holds each playlist's place. The commands (start, pause, nudge, scrub, skip) are shared; each
 member's device follows them on its own, and every member's clock finishes at
 the same moment.
 
 ### Keeping clocks in step
 
 Every command passes through the session's Durable Object, which stamps it
-with server time and the member who sent it. Each device measures its offset
-from server time once per connection and applies commands against that.
-Pause stores the remaining time as computed at the stamped moment. Nothing is
-negotiated between members, because everyone reads one clock.
+with server time and the member who sent it. The DO also flips the phase
+itself when the end time passes, and chains the next end time from the exact
+old end, so a late alarm adds no drift. Nothing is negotiated between
+members, because everyone reads one clock.
 
-The video follows the clock. When a command moves the clock, every device
-seeks its video by the same delta, the way pomodance's scrub already seeks
-the soundtrack. A device that joins mid-phase seeks to where the clock is.
+A device never reads its own wall clock for the session. It counts with its
+steady timer (`performance.now()` in a browser), which does not jump when the
+device corrects its wall clock, and keeps an offset to server time:
+
+- Joining measures the offset from one round trip.
+- Every message from the DO carries server time. A reply to something the
+  device sent is a fresh round trip. Any other message can only show that the
+  device has fallen behind, because the DO stamped it before it arrived.
+- The offset moves only when it is more than 100 ms off. That should be rare:
+  a tab that was suspended, or a network path slower one way than the other.
+- There is no ping. The session's own messages are enough.
+
+### Playlists keep their place
+
+Each playlist carries on from where it stopped, across pomos, as in
+pomodance. The clock holds each playlist's place: for the current phase,
+where it stood when the phase began; for the other phase, where it stopped.
+A device's video belongs at the current playlist's place plus the time into
+the phase. A nudge moves the video with the clock, and a nudge across a phase
+boundary runs one playlist out to the edge and picks the other up where it
+stopped, as pomodance's scrub does.
+
+### Videos seek only at changes
+
+A device seeks its video only when the clock changes: start, pause, nudge,
+skip, a new phase, or joining. It seeks only when the video is more than half
+a second from where it belongs. Between changes the video plays on its own,
+and a video that falls behind while buffering stays behind until the next
+change. Calls already carry a few hundred milliseconds of delay, so tighter
+sync would not be heard, and a video that jumps around is worse than one
+that is a little late. An offset correction never seeks a video.
 
 ### Who controls the clock
 

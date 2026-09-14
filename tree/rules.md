@@ -16,7 +16,8 @@ the same moment.
 Every clock command is one of two kinds:
 
 - **Relative**: jump ±10s, pause, resume. It acts on wherever the clock is.
-- **Fresh**: skip to the next phase. It starts that phase from the top.
+- **Fresh**: skip to the next phase, or a forward jump that would run past
+  the end of this one. It starts the next phase from the top.
 
 The goal is that every member's timer finishes a phase at the same moment,
 because that is when the call opens or closes. Videos may drift a little
@@ -31,9 +32,10 @@ to everyone. The DO also flips the phase itself when the end time passes,
 chaining the next end time from the exact old end.
 
 Only the timer settles. When the DO's answer comes back, the presser's timer
-takes the DO's end time. For a jump that changes nothing, because a jump
-moves the end time by the same amount whenever it is applied. For a pause,
-resume, or skip it moves the timer by about the one-way network delay. While
+takes the DO's end time. For a jump inside the phase that changes nothing,
+because such a jump moves the end time by the same amount whenever it is
+applied. For a pause, resume, or fresh command it moves the timer by about
+the one-way network delay. While
 more of the presser's commands are still on the way, the timer keeps showing
 the presser's own prediction, and it settles once when the last is answered.
 Everyone else's timer reads the DO's end time as soon as the command reaches
@@ -66,9 +68,10 @@ Each playlist carries on from where it stopped, across pomos, as in
 pomodance. The clock holds each playlist's place: for the current phase,
 where it stood when the phase began; for the other phase, where it stopped.
 A device's video belongs at the current playlist's place plus the time into
-the phase. A nudge moves the video with the clock, and a nudge across a phase
-boundary runs one playlist out to the edge and picks the other up where it
-stopped, as pomodance's scrub does.
+the phase. A skip, or a forward jump past the end, leaves this playlist at
+the place it reached and starts the next one at its place. A jump back past
+the start carries into the previous phase and rewinds that playlist with the
+clock, as pomodance's scrub does.
 
 ### A video moves once per command
 

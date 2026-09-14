@@ -48,6 +48,10 @@ Double-pressing −10s on a 1.5 s link shows at once, jumps each video once
 per press, and settles by 0.00 s. A skip that reaches the phone 1.5 s late
 starts its break at 18.5 s.
 
+After version 3, Em asked that +10s with less than ten seconds left start the
+next phase fresh instead of a few seconds in. It now works like a skip. See
+the walkthrough "+10s near the end".
+
 A display cap at the phase length was considered and dropped. Pomodance's
 "longer" button makes a phase legitimately longer than its length.
 

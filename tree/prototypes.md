@@ -5,7 +5,7 @@ that close by building something and reacting to it. Each names the rule it
 tests, so a prototype that disagrees with the tree sends us back to the rule,
 not quietly around it.
 
-### Open: A shared clock in two browsers
+### A shared clock in two browsers
 
 Build the smallest session: one party-db room, one clock row, start, pause,
 nudge, and skip as commands stamped by the Durable Object, and two browsers
@@ -55,12 +55,30 @@ the walkthrough "+10s near the end".
 A display cap at the phase length was considered and dropped. Pomodance's
 "longer" button makes a phase legitimately longer than its length.
 
-Still open:
+Closed on 2026-09-14. Em accepted the brief flicker when two people's presses
+cross. The real transport was out of reach for a one-file prototype, and it
+is the next question: [A shared clock over the real transport](#open-a-shared-clock-over-the-real-transport).
 
-- Whether the brief flicker when two people's presses cross is acceptable in
-  use. It is the walkthrough "Presses that cross".
-- The real transport is not tested here. That is the first implementation,
-  not a prototype.
+Blocked by: nothing.
+
+### Open: A shared clock over the real transport
+
+The first build of the real app, in this repo: a TanStack Start app on
+Cloudflare Workers, one session Durable Object running party-db, and
+`PomoClock` lifted from the prototype into `src/lib`. Two browser tabs join a
+session by link, share one clock, and play the pomodance playlists. Clock
+commands go to the DO, which applies them and writes the clock row with
+party-db's `commit()`. The presser's prediction is local state, not a
+party-db optimistic write, because a whole-row write would lose crossing
+presses.
+
+Not in this build: voice, identity, the general room, the break vote, chat.
+The ledger stays on the device as in pomodance until the general room exists.
+
+Tests: every rule under [The clock](rules.md#the-clock), over a real socket.
+
+Question: does the model from the prototype hold on real devices and real
+networks, and what does the app's skeleton want to look like?
 
 Blocked by: nothing.
 
@@ -90,4 +108,4 @@ Tests: [Voice](rules.md#voice), [Chat](rules.md#chat),
 Question: does the moment at the end of a break land, and does the SFU mute
 trick hold up on a phone?
 
-Blocked by: [A shared clock in two browsers](#open-a-shared-clock-in-two-browsers).
+Blocked by: [A shared clock over the real transport](#open-a-shared-clock-over-the-real-transport).

@@ -19,6 +19,10 @@ Every clock command is one of two kinds:
 - **Fresh**: skip to the next phase, or a forward jump that would run past
   the end of this one. It starts the next phase from the top.
 
+A jump back past the start of a phase carries into the previous phase, and
+that phase comes back as it was: its playlist, and for a yap break, the call.
+This is intended.
+
 The goal is that every member's timer finishes a phase at the same moment,
 because that is when the call opens or closes. Videos may drift a little
 between members, and that is fine.

@@ -85,6 +85,9 @@ the product; the pair is.
   correct drift over 100 ms from messages they already get. No ping.
 - [Playlists keep their place](rules.md#playlists-keep-their-place): each
   playlist carries on across pomos, and the clock row holds its place.
+- [A shared clock in two browsers](prototypes.md#a-shared-clock-in-two-browsers):
+  the prototype that produced the clock rules above, on the
+  `prototype/shared-clock` branch.
 - [A video moves once per command](rules.md#a-video-moves-once-per-command):
   on each device, at the press or on arrival, and is never corrected. It
   lines up again at the next phase.
@@ -103,9 +106,10 @@ The frontier, in the order to take them. Every decision that could be made in
 prose is made; what is left closes by building. See
 [prototypes.md](prototypes.md).
 
-1. [A shared clock in two browsers](prototypes.md#open-a-shared-clock-in-two-browsers)
+1. [A shared clock over the real transport](prototypes.md#open-a-shared-clock-over-the-real-transport),
+   the first build of the real app
 2. [User-owned tables, built](prototypes.md#open-user-owned-tables-built),
-   in the party-db repo
+   in the party-db repo, and independent of 1
 3. [A yap break end to end](prototypes.md#open-a-yap-break-end-to-end).
    Blocked by 1.
 

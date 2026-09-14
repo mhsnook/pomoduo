@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { apply, type Clock, freshClock, placeIn, remainingIn, videoEffect } from './clock'
+import {
+	apply,
+	type Clock,
+	freshClock,
+	musicPlays,
+	placeIn,
+	remainingIn,
+	videoEffect,
+} from './clock'
 
 const durations = { work: 60_000, break: 20_000 }
 const T = 1_000_000
@@ -180,5 +188,46 @@ describe('end', () => {
 		const ended = apply(inBreak, { type: 'end' }, T + 35_000)!
 		expect(ended).toMatchObject({ phase: 'work', endsAt: null, remainingMs: 60_000 })
 		expect(ended.playlist).toEqual({ work: 30_000, break: 5_000 })
+	})
+})
+
+describe('the break vote at the end of work', () => {
+	it('decides the kind of break when work ends, by skip or by rollover', () => {
+		const skipped = apply(running(), { type: 'skip' }, T + 10_000, ['yap', 'yap'])!
+		expect(skipped.breakKind).toBe('yap')
+		expect(skipped.tally).toEqual({ bank: { dance: 0, yap: 0 }, lastLoser: 'dance' })
+		const rolled = apply(running(), { type: 'rollover' }, T + 60_000, ['dance', 'yap'])!
+		expect(rolled.breakKind).toBe('dance')
+		expect(rolled.tally.bank.yap).toBe(1)
+	})
+
+	it('keeps the kind of a break that a jump back returns to', () => {
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const inWork = apply(inYap, { type: 'skip' }, T + 12_000, [])!
+		const backInBreak = apply(inWork, { type: 'nudge', deltaMs: -60_000 }, T + 14_000, [
+			'dance',
+		])!
+		expect(backInBreak.phase).toBe('break')
+		expect(backInBreak.breakKind).toBe('yap')
+		expect(backInBreak.tally).toEqual(inYap.tally)
+	})
+
+	it('plays no music in a yap break, and leaves the break playlist where it was', () => {
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		expect(musicPlays(inYap)).toBe(false)
+		const backToWork = apply(inYap, { type: 'rollover' }, inYap.endsAt!, [])!
+		expect(backToWork.playlist.break).toBe(inYap.playlist.break)
+		expect(musicPlays(backToWork)).toBe(true)
+	})
+
+	it('starts a new session with nothing banked', () => {
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, [
+			'yap',
+			'dance',
+			'dance',
+		])!
+		expect(inYap.tally.bank.yap + inYap.tally.bank.dance).toBeGreaterThan(0)
+		const ended = apply(inYap, { type: 'end' }, T + 20_000)!
+		expect(ended.tally).toEqual({ bank: { dance: 0, yap: 0 }, lastLoser: null })
 	})
 })

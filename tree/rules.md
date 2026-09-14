@@ -114,24 +114,37 @@ Every break is one of two kinds:
 - **yap**: no music, and every member's mic comes back on.
 
 Dance is the default. Each pomo, each member holds the default or picks the
-other one. When the pomo ends, the kind with more weight wins, and the break
-runs that way. You can always mute yourself in a yap break; nobody is obliged
-to yap.
+other one. When the pomo ends, the vote picks the kind, and the break runs
+that way. You can always mute yourself in a yap break; nobody is obliged to
+yap. Until voice exists, a yap break is a break with no music.
 
-### The break vote and its decay
+### The break vote and its bank
 
-- Each member has a weight. Everyone starts a session at weight 1.
-- Not choosing counts as choosing the default, at your full weight.
-- When the pomo ends, each kind's weight is the sum of its members' weights.
-  The heavier kind wins. On a tie, the kind that lost last time wins.
-- After each decision, every member on the winning side has their weight
-  multiplied by the decay factor. Every member on the losing side goes back
-  to 1.
-- The decay factor is 0.7, and it is a tunable. With four members against one
-  and nobody changing their vote, the one gets their way on the fifth pomo.
-- Weights reset when a session ends. They do not carry across sessions.
-- Each member can see their own weight and everyone else's, so the decay is
-  legible and reads as fair rather than random.
+Em replaced the decay-factor weights with a bank on 2026-09-15. It needs
+almost no weighting and still hears everyone, eventually. It does not have to
+be the fairest vote possible.
+
+- Each member who is here counts one vote: their pick, or dance if they did
+  not pick.
+- Each kind has a bank. A kind's total is its votes plus its bank. The higher
+  total wins. On a tie, the kind that lost last time wins, and dance wins the
+  very first tie.
+- The winner spends its bank: it goes back to 0. The loser banks the votes it
+  just cast, so a side that keeps losing keeps adding to its bank.
+- A vote lasts one pomo. Everyone's pick clears when the break starts.
+- The vote is taken when work ends by running out, by a skip, or by a jump
+  past the end. A jump back into the last break returns to it without a vote.
+- The banks reset when a session ends.
+- Everyone can see each kind's votes and bank, and which kind would win now.
+
+What that does, with the same picks every pomo:
+
+| Room                 | Result                                    |
+| -------------------- | ----------------------------------------- |
+| Unanimous            | Always the same kind                      |
+| Two people, one each | Dance, yap, dance, yap                    |
+| Three people, 2-1    | The one gets their way every other break  |
+| Five people, 4-1     | The one gets their way every fourth break |
 
 ## Chat
 

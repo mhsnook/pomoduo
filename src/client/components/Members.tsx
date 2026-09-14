@@ -34,6 +34,11 @@ export function Members({ members, you }: { members: Member[]; you: string }) {
 							/>
 							<span className="font-bold">{member.name || 'someone'}</span>
 							{member.id === you && <span className="opacity-60">you</span>}
+							{member.vote && (
+								<span title={`picked ${member.vote} for this break`} className="ml-auto">
+									{member.vote === 'dance' ? '💃' : '💬'}
+								</span>
+							)}
 							{!member.here && <span className="opacity-60">away</span>}
 						</span>
 						<span className="truncate opacity-80" title={member.intention}>

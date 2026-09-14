@@ -7,6 +7,11 @@ import { z } from 'zod'
 
 const phase = z.enum(['work', 'break'])
 const perPhase = z.object({ work: z.number(), break: z.number() })
+const breakKind = z.enum(['dance', 'yap'])
+const tally = z.object({
+	bank: z.object({ dance: z.number(), yap: z.number() }),
+	lastLoser: breakKind.nullable(),
+})
 
 export const commandSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('start') }),
@@ -37,6 +42,8 @@ export const clockRowSchema = z.object({
 	remainingMs: z.number(),
 	durations: perPhase,
 	playlist: perPhase,
+	breakKind,
+	tally,
 	/** Counts changes, so a device can ignore a row older than the one it has. */
 	revision: z.number(),
 	/** Who made the last change: a member's name, or "the clock" for a rollover. */
@@ -68,6 +75,8 @@ export const memberSchema = z.object({
 	here: z.boolean(),
 	/** Server time when this member last connected, left, or changed their details. */
 	seenAt: z.number(),
+	/** The kind of break this member picked for the end of this pomo; null counts as dance. */
+	vote: breakKind.nullable(),
 })
 export type Member = z.infer<typeof memberSchema>
 
@@ -76,6 +85,12 @@ export const memberUpdateSchema = z.object({
 	id: z.string().min(1).max(64),
 	name: z.string().max(40),
 	intention: z.string().max(500),
+})
+
+/** What a device sends to pick a kind of break, or to take its pick back. */
+export const voteSchema = z.object({
+	id: z.string().min(1).max(64),
+	vote: breakKind.nullable(),
 })
 
 /** The cookie that carries a device's member id on the socket upgrade. */

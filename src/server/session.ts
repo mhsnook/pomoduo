@@ -1,7 +1,7 @@
 import { definePartyCollection, isPartyDbRequest, PartyDbServer } from 'party-db/server'
 import type { Connection, ConnectionContext } from 'partyserver'
 
-import { apply, type Clock, type Command, freshClock } from '../shared/clock'
+import { apply, type Clock, type Command, freshClock, startsBreak } from '../shared/clock'
 import {
 	CLOCK_ROW_ID,
 	type ClockRow,
@@ -15,7 +15,9 @@ import {
 	memberUpdateSchema,
 	type Track,
 	trackSchema,
+	voteSchema,
 } from '../shared/schema'
+import { type BreakKind, DEFAULT_KIND, freshTally } from '../shared/vote'
 
 type SocketState = { memberId: string | null }
 
@@ -38,12 +40,14 @@ const memberIdOf = (request: Request) => {
  * - `POST .../command` changes the clock. The room applies commands in arrival
  *   order and commits the resulting row, which party-db fans out to everyone.
  * - `POST .../member` sets a member's name and intention.
+ * - `POST .../vote` sets a member's pick for the break vote.
  * - `POST .../track` records a video's length, the first time anyone learns it.
  * - `GET .../time` answers with server time, for a device's first sync.
  *
  * The room keeps members' presence itself, from their sockets. It flips the
- * phase itself when the end time passes, and it ends the session when the last
- * device has been gone for a full work phase plus a break.
+ * phase itself when the end time passes, takes the break vote when work ends,
+ * and ends the session when the last device has been gone for a full work
+ * phase plus a break.
  */
 export class Session extends PartyDbServer<Env> {
 	collections = [
@@ -82,7 +86,21 @@ export class Session extends PartyDbServer<Env> {
 			id TEXT PRIMARY KEY,
 			durationMs REAL NOT NULL
 		)`)
+		// columns added after the tables first shipped
+		this.addColumn('clock', 'breakKind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`)
+		this.addColumn(
+			'clock',
+			'tally',
+			`TEXT NOT NULL DEFAULT '${JSON.stringify(freshTally())}'`,
+		)
+		this.addColumn('members', 'vote', 'TEXT')
 		return super.onStart()
+	}
+
+	private addColumn(table: string, column: string, definition: string) {
+		const columns = this.ctx.storage.sql.exec(`PRAGMA table_info(${table})`).toArray()
+		if (columns.some((c) => c.name === column)) return
+		this.ctx.storage.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
 	}
 
 	async onConnect(conn: Connection, ctx: ConnectionContext) {
@@ -133,6 +151,13 @@ export class Session extends PartyDbServer<Env> {
 			await this.serially(() => this.updateMember(parsed.data))
 			return new Response(null, { status: 204 })
 		}
+		if (req.method === 'POST' && action === 'vote') {
+			const parsed = voteSchema.safeParse(await req.json().catch(() => null))
+			if (!parsed.success)
+				return Response.json({ error: parsed.error.message }, { status: 400 })
+			await this.serially(() => this.vote(parsed.data))
+			return new Response(null, { status: 204 })
+		}
 		if (req.method === 'POST' && action === 'track') {
 			const parsed = trackSchema.safeParse(await req.json().catch(() => null))
 			if (!parsed.success)
@@ -162,7 +187,8 @@ export class Session extends PartyDbServer<Env> {
 	private async run({ id, actor, command }: CommandRequest): Promise<CommandResponse> {
 		const serverAt = Date.now()
 		const current = this.readClock()
-		const next = apply(current?.clock ?? freshClock(), command, serverAt)
+		const before = current?.clock ?? freshClock()
+		const next = apply(before, command, serverAt, this.votes())
 		if (!next) return { serverAt, row: null }
 		const row = await this.writeClock(current?.row ?? null, next, {
 			actor,
@@ -170,6 +196,7 @@ export class Session extends PartyDbServer<Env> {
 			commandId: id,
 			stampedAt: serverAt,
 		})
+		if (startsBreak(before, next, command)) await this.clearVotes()
 		await this.schedule()
 		return { serverAt, row }
 	}
@@ -178,14 +205,16 @@ export class Session extends PartyDbServer<Env> {
 		const now = Date.now()
 		const current = this.readClock()
 		if (!current) return
-		const next = apply(current.clock, { type: 'rollover' }, now)
+		const command: Command = { type: 'rollover' }
+		const next = apply(current.clock, command, now, this.votes())
 		if (!next) return
 		await this.writeClock(current.row, next, {
 			actor: 'the clock',
-			command: { type: 'rollover' },
+			command,
 			commandId: null,
 			stampedAt: now,
 		})
+		if (startsBreak(current.clock, next, command)) await this.clearVotes()
 	}
 
 	/** Everyone left and stayed away for a full work phase plus a break: the session is over. */
@@ -227,9 +256,13 @@ export class Session extends PartyDbServer<Env> {
 			...raw,
 			durations: JSON.parse(String(raw.durations)),
 			playlist: JSON.parse(String(raw.playlist)),
+			tally: JSON.parse(String(raw.tally)),
 		})
-		const { phase, endsAt, remainingMs, durations, playlist } = row
-		return { row, clock: { phase, endsAt, remainingMs, durations, playlist } }
+		const { phase, endsAt, remainingMs, durations, playlist, breakKind, tally } = row
+		return {
+			row,
+			clock: { phase, endsAt, remainingMs, durations, playlist, breakKind, tally },
+		}
 	}
 
 	private async writeClock(
@@ -295,7 +328,44 @@ export class Session extends PartyDbServer<Env> {
 		const here = this.openSockets().some((c) => c.state?.memberId === update.id)
 		if (member && member.name === update.name && member.intention === update.intention)
 			return
-		await this.writeMember(member, { ...update, here, seenAt: Date.now() })
+		const vote = member?.vote ?? null
+		await this.writeMember(member, { ...update, here, vote, seenAt: Date.now() })
+	}
+
+	// ---- the break vote ----
+
+	private async vote({ id, vote }: { id: string; vote: BreakKind | null }) {
+		const member = this.readMember(id)
+		if (member?.vote === vote) return
+		const here = this.openSockets().some((c) => c.state?.memberId === id)
+		const base = member ?? { id, name: '', intention: '', here, seenAt: Date.now() }
+		await this.writeMember(member, { ...base, vote })
+	}
+
+	/** One vote for each member who is here: their pick, or the default. */
+	private votes(): BreakKind[] {
+		return this.ctx.storage.sql
+			.exec('SELECT vote FROM members WHERE here = 1')
+			.toArray()
+			.map((r) => (r.vote === 'dance' || r.vote === 'yap' ? r.vote : DEFAULT_KIND))
+	}
+
+	/** A vote lasts one pomo: once the break starts, everyone's pick clears. */
+	private async clearVotes() {
+		const voted = this.ctx.storage.sql
+			.exec('SELECT * FROM members WHERE vote IS NOT NULL')
+			.toArray()
+			.map((raw) => memberSchema.parse({ ...raw, here: Boolean(raw.here) }))
+		if (voted.length === 0) return
+		await this.commit([
+			{
+				channel: 'members',
+				ops: voted.map((member) => ({
+					type: 'update',
+					value: { ...member, vote: null },
+				})),
+			},
+		])
 	}
 
 	// ---- tracks ----

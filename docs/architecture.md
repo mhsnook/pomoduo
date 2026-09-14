@@ -57,6 +57,13 @@ client run it. A command is applied with `apply(clock, command, now)`:
 - A rollover chains from the exact end time, so the room and every device
   land on the same next phase without talking to each other.
 
+**The break vote** (`src/shared/vote.ts`) runs inside `apply`: when a command
+or a rollover ends work, `apply` takes one vote per member who is here and
+decides the break's kind from the votes and the banks in the clock row. The
+room counts the members it has marked here; a device predicting the same
+change counts the members it has. The room clears every pick after the vote.
+A yap break plays no music, so its playlist does not move on.
+
 ## A device
 
 `src/client/session/connection.ts` is one device's connection to a session.

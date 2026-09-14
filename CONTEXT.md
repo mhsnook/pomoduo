@@ -63,10 +63,10 @@ A request to open voice during work. The other member accepts or ignores
 it, and hears nothing until they accept.
 _Avoid_: call, ping, nudge
 
-**Weight**:
-How much a member's break vote counts this pomo. Starts at 1, decays after a
-win, resets after a loss.
-_Avoid_: score, points
+**Bank**:
+Votes a kind of break cast and lost with, which count again at the next vote.
+Spent when that kind wins.
+_Avoid_: weight, score, points
 
 **General room**:
 The room every user is connected to, holding their own pomos and settings.

@@ -6,6 +6,8 @@
  * reach the same clock. The rules live in tree/rules.md under "The clock".
  */
 
+import { type BreakKind, decide, DEFAULT_KIND, freshTally, type Tally } from './vote'
+
 export type Phase = 'work' | 'break'
 
 export const PHASES: Phase[] = ['work', 'break']
@@ -27,6 +29,10 @@ export type Clock = {
 	 * before the playlist's start, so the current phase's place can be negative.
 	 */
 	playlist: Record<Phase, number>
+	/** The kind of the current break, or of the last one while working. */
+	breakKind: BreakKind
+	/** What the break vote remembers between breaks. */
+	tally: Tally
 }
 
 export type Command =
@@ -59,7 +65,28 @@ export const freshClock = (durations: Durations = DEFAULT_DURATIONS): Clock => (
 	remainingMs: durations.work,
 	durations,
 	playlist: { work: 0, break: 0 },
+	breakKind: DEFAULT_KIND,
+	tally: freshTally(),
 })
+
+/** Whether the current phase has music: while it runs, unless it is a yap break. */
+export const musicPlays = (clock: Clock) =>
+	clock.endsAt !== null && !(clock.phase === 'break' && clock.breakKind === 'yap')
+
+/**
+ * The playlists with the current phase's moved on by `ms`. A yap break plays
+ * no music, so its playlist stays where it was.
+ */
+const advanced = (clock: Clock, ms: number) =>
+	clock.phase === 'break' && clock.breakKind === 'yap'
+		? clock.playlist
+		: { ...clock.playlist, [clock.phase]: clock.playlist[clock.phase] + ms }
+
+/** Work is over: the vote decides what kind of break this is. */
+function enterBreak(clock: Clock, votes: BreakKind[]): Clock {
+	const { kind, tally } = decide(votes, clock.tally)
+	return { ...clock, breakKind: kind, tally }
+}
 
 /** What is left on the clock, whether it runs or not. */
 export const remainingIn = (clock: Clock, now: number) =>
@@ -86,14 +113,20 @@ const at = (
 	endsAt: running ? now + remainingMs : null,
 })
 
-/** The next phase from the top. This phase's playlist keeps the place it reached. */
-function nextPhase(clock: Clock, now: number, running: boolean): Clock {
+/**
+ * The next phase from the top. This phase's playlist keeps the place it
+ * reached, and a break that starts this way is put to the vote.
+ */
+function nextPhase(
+	clock: Clock,
+	now: number,
+	running: boolean,
+	votes: BreakKind[],
+): Clock {
 	const next = otherPhase(clock.phase)
-	const playlist = {
-		...clock.playlist,
-		[clock.phase]: clock.playlist[clock.phase] + elapsedIn(clock, now),
-	}
-	return { ...at(clock, next, clock.durations[next], running, now), playlist }
+	const playlist = advanced(clock, elapsedIn(clock, now))
+	const moved = { ...at(clock, next, clock.durations[next], running, now), playlist }
+	return next === 'break' ? enterBreak(moved, votes) : moved
 }
 
 /**
@@ -101,13 +134,13 @@ function nextPhase(clock: Clock, now: number, running: boolean): Clock {
  * jump, whenever it is applied, so the presser and the DO agree on it. Forward
  * past the end starts the next phase fresh. Back past the start carries into
  * the previous phase and rewinds that playlist with the clock, as pomodance's
- * scrub does.
+ * scrub does. A break come back to this way keeps the kind it already had.
  */
-function nudge(clock: Clock, deltaMs: number, now: number): Clock {
+function nudge(clock: Clock, deltaMs: number, now: number, votes: BreakKind[]): Clock {
 	const duration = clock.durations[clock.phase]
 	const running = clock.endsAt !== null
 	const target = elapsedIn(clock, now) + deltaMs
-	if (target >= duration) return nextPhase(clock, now, running)
+	if (target >= duration) return nextPhase(clock, now, running, votes)
 	if (target >= 0) return at(clock, clock.phase, duration - target, running, now)
 	// The previous phase comes back with `under` left, and its video comes back
 	// to where it stopped, minus the same amount. That phase may have ended
@@ -119,8 +152,18 @@ function nudge(clock: Clock, deltaMs: number, now: number): Clock {
 	return { ...at(clock, prev, under, running, now), playlist }
 }
 
-/** One command applied at `now`. Returns null when the command changes nothing. */
-export function apply(clock: Clock, command: Command, now: number): Clock | null {
+/**
+ * One command applied at `now`. Returns null when the command changes nothing.
+ *
+ * `votes` holds one break kind for each member who is here, their pick or the
+ * default. It only counts when the command ends work and starts a break.
+ */
+export function apply(
+	clock: Clock,
+	command: Command,
+	now: number,
+	votes: BreakKind[] = [],
+): Clock | null {
 	const running = clock.endsAt !== null
 	switch (command.type) {
 		case 'start':
@@ -130,19 +173,16 @@ export function apply(clock: Clock, command: Command, now: number): Clock | null
 				? { ...clock, endsAt: null, remainingMs: remainingIn(clock, now) }
 				: null
 		case 'nudge':
-			return nudge(clock, command.deltaMs, now)
+			return nudge(clock, command.deltaMs, now, votes)
 		case 'stretch': {
 			const remaining = remainingIn(clock, now) + command.deltaMs
-			if (remaining <= 0) return nextPhase(clock, now, running)
+			if (remaining <= 0) return nextPhase(clock, now, running, votes)
 			return at(clock, clock.phase, remaining, running, now)
 		}
 		case 'skip':
-			return nextPhase(clock, now, true)
+			return nextPhase(clock, now, true, votes)
 		case 'reset': {
-			const playlist = {
-				...clock.playlist,
-				[clock.phase]: clock.playlist[clock.phase] + elapsedIn(clock, now),
-			}
+			const playlist = advanced(clock, elapsedIn(clock, now))
 			return {
 				...at(clock, clock.phase, clock.durations[clock.phase], false, now),
 				playlist,
@@ -155,27 +195,34 @@ export function apply(clock: Clock, command: Command, now: number): Clock | null
 				: next
 		}
 		case 'end': {
-			const playlist = { ...clock.playlist, [clock.phase]: placeIn(clock, now) }
+			// a new session starts with nothing banked
+			const playlist = advanced(clock, elapsedIn(clock, now))
 			return { ...freshClock(clock.durations), playlist }
 		}
 		case 'rollover': {
 			// Chained from the exact end, so every device and the DO land on the same next end.
 			if (clock.endsAt === null || clock.endsAt > now) return null
 			const next = otherPhase(clock.phase)
-			const playlist = {
-				...clock.playlist,
-				[clock.phase]: clock.playlist[clock.phase] + clock.durations[clock.phase],
-			}
-			return {
+			const moved = {
 				...clock,
 				phase: next,
 				remainingMs: clock.durations[next],
 				endsAt: clock.endsAt + clock.durations[next],
-				playlist,
+				playlist: advanced(clock, clock.durations[clock.phase]),
 			}
+			return next === 'break' ? enterBreak(moved, votes) : moved
 		}
 	}
 }
+
+/**
+ * Whether this change ended work and started a break, which is when the vote
+ * is taken. A jump back into the last break returns to it without a vote.
+ */
+export const startsBreak = (before: Clock, after: Clock, command: Command) =>
+	before.phase === 'work' &&
+	after.phase === 'break' &&
+	!(command.type === 'nudge' && command.deltaMs < 0)
 
 /** What a command asks of a device's video. */
 export type VideoEffect = {
@@ -198,7 +245,7 @@ export function videoEffect(
 	command: Command,
 	now: number,
 ): VideoEffect {
-	const playing = after.endsAt !== null
+	const playing = musicPlays(after)
 	if (after.phase !== before.phase) return { cueAt: placeIn(after, now), playing }
 	if (command.type === 'nudge') return { moveBy: command.deltaMs, playing }
 	return { playing }

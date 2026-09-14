@@ -279,3 +279,19 @@ body {
 		animation: none;
 	}
 }
+
+/* A yap break has no music, so it has no dance floor either. */
+.pomo.is-break.is-yap {
+	--pomo-accent: #7ee0c3;
+	background: #1f3b3a;
+}
+
+.pomo.is-break.is-yap::before {
+	content: none;
+}
+
+.pomo.is-break.is-yap .pomo-clock,
+.pomo.is-break.is-yap .pomo-video-main {
+	animation: none;
+	text-shadow: none;
+}

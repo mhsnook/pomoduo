@@ -14,6 +14,7 @@ import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } fro
 import {
 	isFresh,
 	type MemberCommand,
+	musicPlays,
 	otherPhase,
 	type Phase,
 	PHASES,
@@ -32,6 +33,7 @@ import {
 	Toggle,
 	TransportButton,
 } from './components/ui'
+import { VotePanel } from './components/VotePanel'
 import { cn } from './lib/format'
 import {
 	byStart,
@@ -166,6 +168,8 @@ function Session({
 	const { phase } = clock
 	const running = clock.endsAt !== null
 	const isBreak = phase === 'break'
+	const isYap = isBreak && clock.breakKind === 'yap'
+	const music = musicPlays(clock)
 	const idle = isFresh(clock)
 
 	const [pomos, setPomos] = useState(readPomos)
@@ -397,7 +401,7 @@ function Session({
 		for (const p of PHASES) {
 			const player = players.current[p]
 			if (!player) continue
-			if (p === phase && running) {
+			if (p === phase && music) {
 				tell(p, 'play')
 				// a page that has not been clicked yet is not allowed to start audio,
 				// and the refusal is silent: ask the player afterwards whether it took
@@ -410,10 +414,10 @@ function Session({
 			}
 		}
 		return () => clearTimeout(check)
-	}, [phase, running, playersReady])
+	}, [phase, music, playersReady])
 
 	// the click that dismisses the notice is a user gesture wherever it lands
-	const showMusicBlocked = musicBlocked && running
+	const showMusicBlocked = musicBlocked && music
 	useEffect(() => {
 		if (!showMusicBlocked) return
 		const retry = () => tell(phase, 'play')
@@ -510,6 +514,7 @@ function Session({
 			className={cn(
 				'pomo flex min-h-screen flex-col',
 				isBreak && 'is-break',
+				isYap && 'is-yap',
 				settings.lessMotion && 'is-calm',
 			)}
 		>
@@ -518,7 +523,7 @@ function Session({
 					<header className="flex items-start justify-between gap-4">
 						<div className="flex flex-col gap-1">
 							<h1 className="font-display text-3xl">
-								{isBreak ? '💃 break time 🕺' : '🍅 pomoduo'}
+								{isYap ? '💬 yap break' : isBreak ? '💃 break time 🕺' : '🍅 pomoduo'}
 							</h1>
 							<p className="font-ui text-sm opacity-70">
 								{status === 'connecting'
@@ -550,7 +555,12 @@ function Session({
 						</div>
 					</header>
 
-					{isBreak && (
+					{isYap && (
+						<p data-testid="yap-note" className="font-ui text-center text-lg opacity-80">
+							No music this break. Talk it through.
+						</p>
+					)}
+					{isBreak && !isYap && (
 						<div className="pomo-dancers" aria-hidden>
 							{['💃', '🪩', '🕺', '✨', '💃', '🪩', '🕺'].map((d, i) => (
 								<span key={i}>{d}</span>
@@ -700,6 +710,12 @@ function Session({
 
 				<aside className="flex flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
 					<Members members={members} you={connection.memberId} />
+					<VotePanel
+						clock={clock}
+						members={members}
+						you={connection.memberId}
+						onVote={(kind) => connection.vote(kind)}
+					/>
 					{settings.showLedger && <Ledger pomos={pomos} day={day} onEdit={setEditing} />}
 				</aside>
 			</div>

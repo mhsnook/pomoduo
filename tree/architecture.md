@@ -31,7 +31,7 @@ session's collections:
 
 - the clock, as one row (phase, end time, remaining time, each playlist's
   place, who, when);
-- members, with intention, mic state, presence, and vote weight;
+- members, with intention, mic state, presence, and break pick;
 - votes for the current pomo;
 - chat messages, with a held flag the client honours;
 - the call, as one row (open or closed, and who is on it).

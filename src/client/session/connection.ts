@@ -21,6 +21,7 @@ import {
 	type Track,
 	trackSchema,
 } from '../../shared/schema'
+import { type BreakKind, DEFAULT_KIND } from '../../shared/vote'
 import { memberId } from '../lib/member'
 import { firstSync, resync, type ServerTime, serverNowOf } from '../lib/server-time'
 
@@ -43,18 +44,14 @@ export type SessionState = {
 	lastChange: Pick<ClockRow, 'actor' | 'command' | 'deltaMs' | 'stampedAt'> | null
 }
 
-const clockOf = ({
-	phase,
-	endsAt,
-	remainingMs,
-	durations,
-	playlist,
-}: ClockRow): Clock => ({
-	phase,
-	endsAt,
-	remainingMs,
-	durations,
-	playlist,
+const clockOf = (row: ClockRow): Clock => ({
+	phase: row.phase,
+	endsAt: row.endsAt,
+	remainingMs: row.remainingMs,
+	durations: row.durations,
+	playlist: row.playlist,
+	breakKind: row.breakKind,
+	tally: row.tally,
 })
 
 const commandOf = (row: ClockRow) =>
@@ -161,7 +158,7 @@ export class SessionConnection {
 	press(command: MemberCommand) {
 		const now = this.serverNow()
 		const before = this.state.clock
-		const after = apply(before, command, now)
+		const after = apply(before, command, now, this.votes())
 		const id = crypto.randomUUID()
 		this.own.add(id)
 		this.pending.add(id)
@@ -244,7 +241,7 @@ export class SessionConnection {
 		this.rolloverTimer = setTimeout(
 			() => {
 				const before = this.state.clock
-				const after = apply(before, { type: 'rollover' }, this.serverNow())
+				const after = apply(before, { type: 'rollover' }, this.serverNow(), this.votes())
 				if (after) this.change(before, after, { type: 'rollover' })
 				else this.armRollover()
 			},
@@ -253,6 +250,20 @@ export class SessionConnection {
 	}
 
 	/** Tell the session this member's name and what they are working on. */
+	/** One vote for each member who is here, as the room will count them. */
+	private votes(): BreakKind[] {
+		return this.state.members.filter((m) => m.here).map((m) => m.vote ?? DEFAULT_KIND)
+	}
+
+	/** Pick a kind of break for the end of this pomo, or take the pick back with null. */
+	vote(kind: BreakKind | null) {
+		void fetch(`${this.base}/vote`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ id: this.memberId, vote: kind }),
+		}).catch((error) => console.error(error))
+	}
+
 	updateMember(details: { name: string; intention: string }) {
 		void fetch(`${this.base}/member`, {
 			method: 'POST',

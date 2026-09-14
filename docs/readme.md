@@ -21,6 +21,11 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   minute longer or shorter, start over, and skip. Any member can press
   anything, and everyone sees it, with a line under the clock saying who did
   it. Pausing or playing the video counts as pressing pause or start.
+- **The break vote.** Under the members list, each member picks dance or yap
+  for the break this pomo ends in. Not picking counts as dance. The losing
+  kind banks its votes for next time, so a 50-50 duo takes turns and a lone
+  holdout gets their way now and then. Picks clear when the break starts.
+- **Yap breaks** play no music and have no dance floor. Voice comes later.
 - **The phase lengths** belong to the session. Changing them in Settings
   changes them for everyone.
 - **The soundtrack.** Each phase has its own YouTube playlist, as in pomodance.
@@ -33,8 +38,8 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
 
 ## Not yet
 
-Voice, the break vote, chat, identity beyond a typed name on each device, and
-a ledger that follows you across devices. Each of these is in the tree.
+Voice, chat, identity beyond a typed name on each device, and a ledger that
+follows you across devices. Each of these is in the tree.
 
 ## Differences from pomodance
 

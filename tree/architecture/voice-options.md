@@ -37,15 +37,15 @@ What should carry the audio between participants: Cloudflare Realtime SFU (or Re
 
 ## Trade-offs
 
-| | Cloudflare SFU + partytracks | RealtimeKit | P2P mesh + DO | Daily |
-|---|---|---|---|---|
-| Marginal cost at this scale | Zero inside 1,000 GB | About $0.03 per 25 min block for 2 people | Zero, TURN relay only | Zero inside 10k min, then about $0.05 per 25 min block for 2 people |
-| Extra vendor or account | No | No | No | Yes |
-| Signalling owned by | Your DO | Cloudflare | Your DO | Daily |
-| Mute semantics | Must keep packets flowing (30 s rule) | SDK handles it | Free choice | SDK handles it |
-| 6 person room | SFU, one uplink per peer | Same | 5 uplinks per peer | SFU |
-| Effort for one dev | Medium; copy from meet | Low | Low for 2, medium for 6 | Low |
-| Lock-in | Cloudflare API, thin | Cloudflare SDK, heavy | None | Daily SDK |
+|                             | Cloudflare SFU + partytracks          | RealtimeKit                               | P2P mesh + DO           | Daily                                                               |
+| --------------------------- | ------------------------------------- | ----------------------------------------- | ----------------------- | ------------------------------------------------------------------- |
+| Marginal cost at this scale | Zero inside 1,000 GB                  | About $0.03 per 25 min block for 2 people | Zero, TURN relay only   | Zero inside 10k min, then about $0.05 per 25 min block for 2 people |
+| Extra vendor or account     | No                                    | No                                        | No                      | Yes                                                                 |
+| Signalling owned by         | Your DO                               | Cloudflare                                | Your DO                 | Daily                                                               |
+| Mute semantics              | Must keep packets flowing (30 s rule) | SDK handles it                            | Free choice             | SDK handles it                                                      |
+| 6 person room               | SFU, one uplink per peer              | Same                                      | 5 uplinks per peer      | SFU                                                                 |
+| Effort for one dev          | Medium; copy from meet                | Low                                       | Low for 2, medium for 6 | Low                                                                 |
+| Lock-in                     | Cloudflare API, thin                  | Cloudflare SDK, heavy                     | None                    | Daily SDK                                                           |
 
 Ringing and mobile Safari behaviour are identical across options; they are browser problems, not transport problems. The DO is a good signalling host in every option that needs one.
 

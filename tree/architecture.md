@@ -5,13 +5,17 @@ How pomoduo is built. Settled sections are decisions; open sections are not.
 
 ## Stack
 
-A fresh app in this repo on TanStack Start (React 19) and Cloudflare Workers,
-the same stack as emju-site. The pomodance timer, pomo, and ledger model is
-the starting point and gets lifted, not rewritten. Its `-lib.ts` layout was a
-convention for living inside another site's router and does not carry over:
-files go where a stock TanStack Start app puts them (`src/lib`, `src/routes`,
-`src/server`). Cloudflare's Durable Objects are the natural home for a
-session, one object per session.
+A fresh app with its own repo and its own Cloudflare Worker. The client is a
+Vite + React single-page app with no framework router: it has two screens,
+and `index.html` is its static shell. One Worker serves the built app as
+static assets and routes `/parties/session/<id>` to that session's Durable
+Object, one object per session, in the pattern scribble-harness uses. Tooling
+is pnpm, Vite, Tailwind with daisyUI, oxlint, oxfmt, and Vitest, with a
+pre-commit hook that runs all of them.
+
+The pomodance timer, pomo, and ledger model is the starting point and gets
+lifted, not rewritten. Its `-lib.ts` layout came from living inside another
+site's router and does not carry over.
 
 ## Identity
 
@@ -37,6 +41,11 @@ server-originated write path, so no heartbeat rows and no oplog churn. Held
 chat is enforced by the recipient's client, not the server: the row arrives
 and stays hidden until the phase or the call changes. Between friends that
 is enough.
+
+Members read the room through party-db and never write through it. The room
+refuses party-db's write path and changes only through its own endpoints:
+commands for the clock, and a small endpoint that records video lengths. That
+keeps every change to the clock going through `apply`, in order.
 
 Cloudflare Access verifies in party-db's authorize hook, with the JWT read
 from the Access cookie, which is a small change inside party-db.

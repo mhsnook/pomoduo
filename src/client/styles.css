@@ -1,0 +1,281 @@
+/* Self-hosted fonts (bundled by Vite — no external requests at runtime). */
+@import '@fontsource-variable/atkinson-hyperlegible-next/wght.css';
+
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/typography';
+
+@plugin 'daisyui' {
+	themes:
+		emju --default,
+		emju-dark --prefersdark;
+}
+
+/* A restrained, warm-paper light theme. One ink, one quiet accent. */
+@plugin 'daisyui/theme' {
+	name: 'emju';
+	default: true;
+	color-scheme: light;
+
+	--color-base-100: oklch(99% 0.004 95);
+	--color-base-200: oklch(96.5% 0.006 95);
+	--color-base-300: oklch(92.5% 0.008 95);
+	--color-base-content: oklch(26% 0.02 310);
+
+	--color-primary: oklch(79% 0.11 310);
+	--color-primary-content: oklch(28% 0.07 310);
+	--color-secondary: oklch(52% 0.07 205);
+	--color-secondary-content: oklch(98% 0.01 205);
+	--color-accent: oklch(62% 0.13 45);
+	--color-accent-content: oklch(99% 0.01 45);
+	--color-neutral: oklch(54% 0.07 310);
+	--color-neutral-content: oklch(96% 0.01 310);
+
+	--color-info: oklch(60% 0.1 230);
+	--color-success: oklch(60% 0.12 150);
+	--color-warning: oklch(75% 0.13 80);
+	--color-error: oklch(58% 0.18 27);
+
+	--radius-selector: 0.4rem;
+	--radius-field: 0.4rem;
+	--radius-box: 0.6rem;
+	--size-selector: 0.25rem;
+	--size-field: 0.25rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@plugin 'daisyui/theme' {
+	name: 'emju-dark';
+	color-scheme: dark;
+
+	--color-base-100: oklch(20% 0.02 310);
+	--color-base-200: oklch(17% 0.02 310);
+	--color-base-300: oklch(14% 0.02 310);
+	--color-base-content: oklch(93% 0.01 95);
+
+	--color-primary: oklch(72% 0.11 310);
+	--color-primary-content: oklch(18% 0.03 310);
+	--color-secondary: oklch(70% 0.07 205);
+	--color-secondary-content: oklch(16% 0.02 205);
+	--color-accent: oklch(72% 0.13 45);
+	--color-accent-content: oklch(18% 0.03 45);
+	--color-neutral: oklch(28% 0.02 310);
+	--color-neutral-content: oklch(95% 0.01 310);
+
+	--radius-selector: 0.4rem;
+	--radius-field: 0.4rem;
+	--radius-box: 0.6rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@theme {
+	--font-sans:
+		'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-serif:
+		'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-body:
+		'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+	font-family: var(--font-body);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+/* Headings and controls share the body face. */
+.font-display {
+	font-family: var(--font-serif);
+	font-weight: 400;
+	letter-spacing: -0.01em;
+}
+
+.font-ui {
+	font-family: var(--font-sans);
+}
+
+/* ---- the page, lifted from pomodance ---- */
+
+.pomo {
+	--pomo-bg: #0b1f2a;
+	--pomo-fg: #e6f4f8;
+	--pomo-accent: #359fcc;
+	background: var(--pomo-bg);
+	color: var(--pomo-fg);
+	transition: background 800ms ease;
+}
+
+.pomo.is-break {
+	--pomo-fg: #fff;
+	--pomo-accent: #ffe14d;
+	background: #7b2cbf;
+	position: relative;
+	isolation: isolate;
+}
+
+/* the gradient lives on a pseudo-element so hue-rotate never tints the video or emoji */
+.pomo.is-break::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	background: linear-gradient(120deg, #ff2d95, #ff9f1c, #2ec4b6, #7b2cbf, #ff2d95);
+	background-size: 400% 400%;
+	animation:
+		pomo-gradient 4s linear infinite,
+		pomo-hue 3s linear infinite;
+}
+
+/* the break wobble scales the clock past its own box, over the nudge buttons
+   beside it, and a transformed element is hit-tested where it is drawn */
+.pomo-clock {
+	pointer-events: none;
+}
+
+.pomo-controls {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+}
+
+/* The page background is fixed, so only the page's own content passes under the
+   bar and the blur is what keeps the clock readable over it. The veil is a
+   pseudo-element rather than the bar's own background so the mask can fade the
+   blur out at the bottom edge without fading the clock with it. */
+.pomo-controls::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background: rgb(0 0 0 / 0.12);
+	backdrop-filter: blur(14px);
+	mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+.pomo.is-break .pomo-clock {
+	animation: pomo-wobble 0.6s ease-in-out infinite alternate;
+	text-shadow:
+		4px 4px 0 #7b2cbf,
+		-4px -4px 0 #2ec4b6;
+}
+
+.pomo.is-break .pomo-video-main {
+	animation: pomo-tilt 1.2s ease-in-out infinite alternate;
+}
+
+.pomo-dancers {
+	font-size: clamp(2rem, 8vw, 5rem);
+	display: flex;
+	justify-content: center;
+	gap: 0.5em;
+	pointer-events: none;
+}
+
+.pomo-dancers span {
+	display: inline-block;
+	animation: pomo-bounce 0.5s ease-in-out infinite alternate;
+}
+
+.pomo-dancers span:nth-child(2n) {
+	animation-delay: -0.25s;
+	animation-name: pomo-spin-bounce;
+}
+
+.pomo-dancers span:nth-child(3n) {
+	animation-duration: 0.35s;
+}
+
+@keyframes pomo-gradient {
+	0% {
+		background-position: 0% 50%;
+	}
+	100% {
+		background-position: 400% 50%;
+	}
+}
+
+@keyframes pomo-hue {
+	to {
+		filter: hue-rotate(360deg);
+	}
+}
+
+@keyframes pomo-wobble {
+	from {
+		transform: rotate(-4deg) scale(1);
+	}
+	to {
+		transform: rotate(4deg) scale(1.08);
+	}
+}
+
+@keyframes pomo-tilt {
+	from {
+		transform: rotate(-1.5deg) translateY(-4px);
+	}
+	to {
+		transform: rotate(1.5deg) translateY(4px);
+	}
+}
+
+@keyframes pomo-bounce {
+	from {
+		transform: translateY(0);
+	}
+	to {
+		transform: translateY(-0.6em);
+	}
+}
+
+@keyframes pomo-spin-bounce {
+	from {
+		transform: translateY(0) rotate(-20deg);
+	}
+	to {
+		transform: translateY(-0.6em) rotate(20deg);
+	}
+}
+
+.pomo.is-break.is-calm {
+	--pomo-accent: #ffd166;
+	background: #3b2a52;
+}
+
+/* content:none removes the gradient layer outright, so it needs no animation reset */
+.pomo.is-break.is-calm::before {
+	content: none;
+}
+
+.pomo.is-break.is-calm .pomo-clock {
+	animation: none;
+	text-shadow: none;
+}
+
+.pomo.is-break.is-calm .pomo-video-main,
+.pomo.is-calm .pomo-dancers span {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pomo.is-break::before,
+	.pomo.is-break .pomo-clock,
+	.pomo.is-break .pomo-video-main,
+	.pomo-dancers span {
+		animation: none;
+	}
+}

@@ -174,11 +174,11 @@ into held chat.
 
 The concepts above have current words, and the words are skinnable:
 
-| Concept | Default word |
-| --- | --- |
-| The work phase | work |
-| The break kind with mics on | yap |
-| The break kind with music on | dance |
+| Concept                      | Default word |
+| ---------------------------- | ------------ |
+| The work phase               | work         |
+| The break kind with mics on  | yap          |
+| The break kind with music on | dance        |
 
 Swapping a pair is an easter egg, not a setting page. Not yet specified: see
 the readme.

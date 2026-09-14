@@ -63,14 +63,13 @@ Blocked by: nothing.
 
 ### Open: A shared clock over the real transport
 
-The first build of the real app, in this repo: a TanStack Start app on
-Cloudflare Workers, one session Durable Object running party-db, and
-`PomoClock` lifted from the prototype into `src/lib`. Two browser tabs join a
-session by link, share one clock, and play the pomodance playlists. Clock
-commands go to the DO, which applies them and writes the clock row with
-party-db's `commit()`. The presser's prediction is local state, not a
-party-db optimistic write, because a whole-row write would lose crossing
-presses.
+The first build of the real app, in this repo: one Worker, one session
+Durable Object running party-db, and the prototype's clock module lifted into
+`src/shared/clock.ts`. Sessions open by link, share one clock, and play the
+pomodance playlists. Clock commands go to the room's own endpoint, which
+applies them and commits the clock row with party-db's `commit()`. The
+presser's prediction is local state, not a party-db optimistic write, because
+a whole-row write would lose crossing presses.
 
 Not in this build: voice, identity, the general room, the break vote, chat.
 The ledger stays on the device as in pomodance until the general room exists.
@@ -79,6 +78,30 @@ Tests: every rule under [The clock](rules.md#the-clock), over a real socket.
 
 Question: does the model from the prototype hold on real devices and real
 networks, and what does the app's skeleton want to look like?
+
+Built on 2026-09-14. [docs/architecture.md](../docs/architecture.md) says how
+it works. Checked in local dev, with two and then three separate headless
+Chrome profiles on one machine:
+
+- Every press showed on both members with the same clock and the same byline.
+- Both members flipped from work to break within 0 ms of each other, and a
+  member who joined mid-break flipped back to work within 7 ms of the others.
+- Each member got their own review dialog and ledger entry.
+
+Found while building:
+
+- Clients could write the room's tables directly through party-db, which
+  would bypass `apply`. The room now refuses party-db's write path.
+- Two devices learning the same video's length at once collided. Lengths now
+  go through the room, one at a time.
+- A device a few milliseconds behind server time showed 01:06 at the top of a
+  65 second phase. The clock face now ignores the same 100 ms the offset
+  correction tolerates.
+- Pressing play or pause inside a YouTube video no longer drives the clock, as
+  it did in pomodance. In a session it would stop everyone's clock by accident.
+
+Still open: real devices on real networks. That needs the Worker deployed
+and a real session with a friend, which is Em's step.
 
 Blocked by: nothing.
 

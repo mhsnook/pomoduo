@@ -1,0 +1,6 @@
+# There are no workspace packages. This file holds pnpm's settings.
+#
+# esbuild and workerd need their install scripts to fetch the right platform binary.
+onlyBuiltDependencies:
+  - esbuild
+  - workerd

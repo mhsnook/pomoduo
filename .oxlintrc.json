@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react", "import", "vitest"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "builtin": true,
+    "browser": true,
+    "es2024": true
+  },
+  "ignorePatterns": ["worker-configuration.d.ts", "dist/**", "prototypes/**"],
+  "overrides": [
+    {
+      "files": ["src/server/**", "*.config.ts"],
+      "env": { "browser": false, "node": true }
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+#!/bin/sh
+# The same gate CI would run: formatting, lint, types, and unit tests.
+# `pnpm install` points git at this folder (see the "prepare" script).
+exec pnpm check

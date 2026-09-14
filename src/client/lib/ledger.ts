@@ -14,6 +14,35 @@ export type Pomo = {
 	intention: string
 	note: string
 	confirmed: boolean
+	/**
+	 * How long the work clock ran for this pomo, not counting pauses. Missing on
+	 * pomos filed before it was kept, and on pomos whose times were edited by
+	 * hand: those count from start to end.
+	 */
+	workedMs?: number
+	/** Wall time the clock last started running for this pomo, while it runs. */
+	runningSince?: number | null
+}
+
+/** The clock started running for this pomo. */
+export const resumeWork = (pomo: Pomo, now: number): Pomo =>
+	pomo.runningSince ? pomo : { ...pomo, workedMs: pomo.workedMs ?? 0, runningSince: now }
+
+/** The clock stopped: bank the time it ran. */
+export const pauseWork = (pomo: Pomo, now: number): Pomo =>
+	pomo.runningSince
+		? {
+				...pomo,
+				workedMs: (pomo.workedMs ?? 0) + Math.max(0, now - pomo.runningSince),
+				runningSince: null,
+			}
+		: pomo
+
+/** How long the clock ran for this pomo, up to `now` if it still runs. */
+export function workedOf(pomo: Pomo, now = Date.now()) {
+	if (pomo.workedMs === undefined)
+		return (pomo.end ? Date.parse(pomo.end) : now) - Date.parse(pomo.start)
+	return pomo.workedMs + (pomo.runningSince ? Math.max(0, now - pomo.runningSince) : 0)
 }
 
 const POMOS_KEY = 'pomos'
@@ -42,11 +71,11 @@ export function closeAbandoned(
 ): Pomo[] {
 	const open = pomos.filter((p) => p.end === null)
 	const carried = keepLastOpen ? open.at(-1) : undefined
-	return pomos.map((p) =>
-		p.end === null && p !== carried
-			? { ...p, end: new Date(Math.min(now, Date.parse(p.start) + workMs)).toISOString() }
-			: p,
-	)
+	return pomos.map((p) => {
+		if (p.end !== null || p === carried) return p
+		const end = Math.min(now, Date.parse(p.start) + workMs)
+		return { ...pauseWork(p, end), end: new Date(end).toISOString() }
+	})
 }
 
 /** The pomo a session can pick back up: the last one, if it is finished, filed
@@ -102,15 +131,28 @@ export function draftError(draft: PomoDraft, otherOpen = false): string | null {
 }
 
 /** An empty end puts the pomo back in progress, which is how two get merged by hand. */
-export const pomoFromDraft = (pomo: Pomo, draft: PomoDraft): Pomo => ({
-	...pomo,
-	day: draft.day,
-	start: new Date(draft.start).toISOString(),
-	end: draft.end ? new Date(draft.end).toISOString() : null,
-	intention: draft.intention,
-	note: draft.note,
-	confirmed: draft.confirmed,
-})
+/**
+ * The pomo as the form left it. Times the form did not change keep their
+ * seconds and the worked time. Times it did change are what the ledger counts
+ * from then on.
+ */
+export function pomoFromDraft(pomo: Pomo, draft: PomoDraft): Pomo {
+	const same = draftOf(pomo)
+	const edited = {
+		...pomo,
+		day: draft.day,
+		intention: draft.intention,
+		note: draft.note,
+		confirmed: draft.confirmed,
+	}
+	if (draft.start === same.start && draft.end === same.end) return edited
+	const { workedMs: _worked, runningSince: _since, ...byHand } = edited
+	return {
+		...byHand,
+		start: new Date(draft.start).toISOString(),
+		end: draft.end ? new Date(draft.end).toISOString() : null,
+	}
+}
 
 /** Edited times can land anywhere, and the ledger reads the list in order. */
 export const byStart = (a: Pomo, b: Pomo) => Date.parse(a.start) - Date.parse(b.start)
@@ -121,7 +163,7 @@ export const byStart = (a: Pomo, b: Pomo) => Date.parse(a.start) - Date.parse(b.
  * this one counts however long it ran.
  */
 export const isThrowaway = (pomo: Pomo, now: number) =>
-	!pomo.confirmed && now - Date.parse(pomo.start) < MIN_POMO_MS
+	!pomo.confirmed && workedOf(pomo, now) < MIN_POMO_MS
 
 export const loadIntention = () => read<string>(INTENTION_KEY, '')
 export const saveIntention = (v: string) => write(INTENTION_KEY, v)
@@ -181,10 +223,7 @@ export function pastDays(pomos: Pomo[], day: string): { day: string; pomos: Pomo
 
 /** What a day came to: how many pomos, and how long the finished ones ran. */
 export function dayTotals(pomos: Pomo[]) {
-	const ms = pomos.reduce(
-		(total, p) => total + (p.end ? Date.parse(p.end) - Date.parse(p.start) : 0),
-		0,
-	)
+	const ms = pomos.reduce((total, p) => total + (p.end ? workedOf(p) : 0), 0)
 	return { count: pomos.length, minutes: Math.round(ms / 60_000) }
 }
 

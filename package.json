@@ -24,7 +24,6 @@
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
     "@standard-schema/spec": "^1.1.0",
     "@tanstack/db": "^0.6.17",
-    "@tanstack/react-db": "^0.1.96",
     "lucide-react": "^1.46.0",
     "party-db": "^0.0.4",
     "partyserver": "^0.5.10",

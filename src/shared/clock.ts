@@ -23,7 +23,8 @@ export type Clock = {
 	/**
 	 * Each playlist's place, in ms from the start of the playlist. For the
 	 * current phase, where it stood when the phase began; for the other phase,
-	 * where it stopped.
+	 * where it stopped. A phase entered by jumping back into it can begin
+	 * before the playlist's start, so the current phase's place can be negative.
 	 */
 	playlist: Record<Phase, number>
 }
@@ -42,9 +43,11 @@ export type Command =
 	| { type: 'durations'; durations: Durations }
 	/** The end time passed. Every device and the DO run this on their own. */
 	| { type: 'rollover' }
+	/** Everyone left and the grace window passed: back to the top of work, stopped. */
+	| { type: 'end' }
 
-/** The commands a member can send. A rollover only ever comes from the clock itself. */
-export type MemberCommand = Exclude<Command, { type: 'rollover' }>
+/** The commands a member can send. A rollover or an end only ever comes from the room itself. */
+export type MemberCommand = Exclude<Command, { type: 'rollover' | 'end' }>
 
 export const DEFAULT_DURATIONS: Durations = { work: 25 * 60_000, break: 5 * 60_000 }
 
@@ -106,13 +109,14 @@ function nudge(clock: Clock, deltaMs: number, now: number): Clock {
 	const target = elapsedIn(clock, now) + deltaMs
 	if (target >= duration) return nextPhase(clock, now, running)
 	if (target >= 0) return at(clock, clock.phase, duration - target, running, now)
+	// The previous phase comes back with `under` left, and its video comes back
+	// to where it stopped, minus the same amount. That phase may have ended
+	// early, so where it began is wherever makes those two agree.
 	const prev = otherPhase(clock.phase)
 	const prevDuration = clock.durations[prev]
-	const playlist = {
-		...clock.playlist,
-		[prev]: Math.max(0, clock.playlist[prev] - prevDuration),
-	}
-	return { ...at(clock, prev, Math.min(-target, prevDuration), running, now), playlist }
+	const under = Math.min(-target, prevDuration)
+	const playlist = { ...clock.playlist, [prev]: clock.playlist[prev] - prevDuration }
+	return { ...at(clock, prev, under, running, now), playlist }
 }
 
 /** One command applied at `now`. Returns null when the command changes nothing. */
@@ -149,6 +153,10 @@ export function apply(clock: Clock, command: Command, now: number): Clock | null
 			return isFresh(clock)
 				? { ...next, remainingMs: command.durations[clock.phase] }
 				: next
+		}
+		case 'end': {
+			const playlist = { ...clock.playlist, [clock.phase]: placeIn(clock, now) }
+			return { ...freshClock(clock.durations), playlist }
 		}
 		case 'rollover': {
 			// Chained from the exact end, so every device and the DO land on the same next end.
@@ -191,14 +199,11 @@ export function videoEffect(
 	now: number,
 ): VideoEffect {
 	const playing = after.endsAt !== null
-	if (after.phase !== before.phase)
-		return { cueAt: after.playlist[after.phase] + elapsedIn(after, now), playing }
+	if (after.phase !== before.phase) return { cueAt: placeIn(after, now), playing }
 	if (command.type === 'nudge') return { moveBy: command.deltaMs, playing }
 	return { playing }
 }
 
-/** Joining: the video starts where the shared clock is. */
-export const joinEffect = (clock: Clock, now: number): VideoEffect => ({
-	cueAt: clock.playlist[clock.phase] + elapsedIn(clock, now),
-	playing: clock.endsAt !== null,
-})
+/** Where the current phase's playlist is now, in ms from its start. */
+export const placeIn = (clock: Clock, now: number) =>
+	Math.max(0, clock.playlist[clock.phase] + elapsedIn(clock, now))

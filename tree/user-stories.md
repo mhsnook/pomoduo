@@ -53,6 +53,11 @@ Each member files their own pomos, with their own intention, note, and review,
 exactly as in solo. Nothing about a pomo is shared between members except the
 intention shown live during a session. The clock is shared; the ledger is not.
 
+A pomo's length is the time the work clock actually ran for it. Pauses do
+not count. The clock's own start and pause are what the ledger listens to,
+so nothing about a pomo's length is a guess, except for a pomo a closed tab
+left open while the clock was nowhere to be seen.
+
 The ledger and a person's settings are theirs across devices and browsers.
 They live in a user-owned table in the general room, not in the session room
 and not only on the device. See [architecture](architecture.md#the-general-room).

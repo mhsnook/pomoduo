@@ -9,12 +9,15 @@ import {
 	formatDuration,
 	isThrowaway,
 	pastDays,
+	pauseWork,
 	type Pomo,
 	pomoFromDraft,
 	resolveDay,
+	resumeWork,
 	straddlesRollover,
 	toLocalInput,
 	workDayOf,
+	workedOf,
 } from './ledger'
 
 // Lifted from pomodance.
@@ -210,5 +213,45 @@ describe('isThrowaway', () => {
 	})
 	it('keeps one that has been reviewed, however short it ran', () => {
 		expect(isThrowaway(pomoAt(now - 20_000, null, { confirmed: true }), now)).toBe(false)
+	})
+})
+
+describe('worked time', () => {
+	const t0 = Date.parse('2026-09-14T20:00:00Z')
+
+	it('counts only while the clock runs', () => {
+		let pomo = resumeWork(pomoAt(t0, null), t0)
+		pomo = pauseWork(pomo, t0 + 10 * 60_000)
+		pomo = resumeWork(pomo, t0 + 15 * 60_000)
+		expect(workedOf(pomo, t0 + 20 * 60_000)).toBe(15 * 60_000)
+		pomo = pauseWork(pomo, t0 + 20 * 60_000)
+		expect(workedOf(pomo, t0 + 99 * 60_000)).toBe(15 * 60_000)
+	})
+
+	it('falls back to start and end for a pomo without it', () => {
+		expect(workedOf(pomoAt(t0, 25 * 60_000))).toBe(25 * 60_000)
+	})
+
+	it('banks what ran when a closed tab left the pomo open', () => {
+		const open = resumeWork(pomoAt(t0, null), t0 + 60_000)
+		const [closed] = closeAbandoned([open], WORK_MS, false, t0 + 90 * 60_000)
+		expect(closed.end).toBe(new Date(t0 + WORK_MS).toISOString())
+		expect(workedOf(closed)).toBe(WORK_MS - 60_000)
+	})
+
+	it('keeps the worked time through an edit that leaves the times alone', () => {
+		const pomo = { ...pomoAt(t0, 30 * 60_000), workedMs: 20 * 60_000, runningSince: null }
+		expect(workedOf(pomoFromDraft(pomo, { ...draftOf(pomo), note: 'done' }))).toBe(
+			20 * 60_000,
+		)
+		const later = toLocalInput(new Date(t0 + 40 * 60_000).toISOString())
+		expect(workedOf(pomoFromDraft(pomo, { ...draftOf(pomo), end: later }))).toBe(
+			40 * 60_000,
+		)
+	})
+
+	it('drops a pomo that ran under a minute, however long it sat paused', () => {
+		const paused = pauseWork(resumeWork(pomoAt(t0, null), t0), t0 + 30_000)
+		expect(isThrowaway(paused, t0 + 20 * 60_000)).toBe(true)
 	})
 })

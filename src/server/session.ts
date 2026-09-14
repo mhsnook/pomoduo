@@ -1,4 +1,5 @@
 import { definePartyCollection, isPartyDbRequest, PartyDbServer } from 'party-db/server'
+import type { Connection, ConnectionContext } from 'partyserver'
 
 import { apply, type Clock, type Command, freshClock } from '../shared/clock'
 import {
@@ -8,30 +9,50 @@ import {
 	type CommandRequest,
 	commandRequestSchema,
 	type CommandResponse,
+	MEMBER_COOKIE,
+	type Member,
+	memberSchema,
+	memberUpdateSchema,
 	type Track,
 	trackSchema,
 } from '../shared/schema'
 
+type SocketState = { memberId: string | null }
+
+/** Storage key: when the last device left, while nobody has come back. */
+const EMPTY_SINCE = 'emptySince'
+
+const memberIdOf = (request: Request) => {
+	const cookie = request.headers.get('cookie') ?? ''
+	const match = new RegExp(`(?:^|;\\s*)${MEMBER_COOKIE}=([\\w-]{1,64})`).exec(cookie)
+	return match?.[1] ?? null
+}
+
 /**
- * One session: the shared clock, and the video lengths its members have learned.
+ * One session: the shared clock, its members, and the video lengths its
+ * members have learned.
  *
- * Members read both through party-db, and change them only through this room's
- * own endpoints, never party-db's write path:
+ * Members read all three through party-db, and change them only through this
+ * room's own endpoints, never party-db's write path:
  *
  * - `POST .../command` changes the clock. The room applies commands in arrival
  *   order and commits the resulting row, which party-db fans out to everyone.
+ * - `POST .../member` sets a member's name and intention.
  * - `POST .../track` records a video's length, the first time anyone learns it.
  * - `GET .../time` answers with server time, for a device's first sync.
  *
- * The room also flips the phase itself, from an alarm, when the end time passes.
+ * The room keeps members' presence itself, from their sockets. It flips the
+ * phase itself when the end time passes, and it ends the session when the last
+ * device has been gone for a full work phase plus a break.
  */
 export class Session extends PartyDbServer<Env> {
 	collections = [
 		definePartyCollection({ name: 'clock', key: 'id', schema: clockRowSchema }),
+		definePartyCollection({ name: 'members', key: 'id', schema: memberSchema }),
 		definePartyCollection({ name: 'tracks', key: 'id', schema: trackSchema }),
 	]
 
-	/** Commands and alarms run one at a time, so each reads the row the last one wrote. */
+	/** Every change runs one at a time, so each reads what the last one wrote. */
 	private queue: Promise<unknown> = Promise.resolve()
 
 	async onStart() {
@@ -50,11 +71,39 @@ export class Session extends PartyDbServer<Env> {
 			deltaMs REAL NOT NULL,
 			commandId TEXT
 		)`)
+		sql.exec(`CREATE TABLE IF NOT EXISTS members (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			intention TEXT NOT NULL,
+			here INTEGER NOT NULL,
+			seenAt REAL NOT NULL
+		)`)
 		sql.exec(`CREATE TABLE IF NOT EXISTS tracks (
 			id TEXT PRIMARY KEY,
 			durationMs REAL NOT NULL
 		)`)
 		return super.onStart()
+	}
+
+	async onConnect(conn: Connection, ctx: ConnectionContext) {
+		const memberId = isPartyDbRequest(ctx.request) ? memberIdOf(ctx.request) : null
+		conn.setState({ memberId } satisfies SocketState)
+		await super.onConnect(conn, ctx)
+		await this.serially(async () => {
+			await this.ctx.storage.delete(EMPTY_SINCE)
+			if (memberId) await this.markPresence(memberId)
+			await this.schedule()
+		})
+	}
+
+	async onClose(conn: Connection) {
+		const { memberId } = (conn.state ?? { memberId: null }) as SocketState
+		await this.serially(async () => {
+			if (memberId) await this.markPresence(memberId, conn.id)
+			if (this.openSockets(conn.id).length === 0)
+				await this.ctx.storage.put(EMPTY_SINCE, Date.now())
+			await this.schedule()
+		})
 	}
 
 	async onRequest(req: Request): Promise<Response> {
@@ -77,6 +126,13 @@ export class Session extends PartyDbServer<Env> {
 			const response = await this.serially(() => this.run(parsed.data))
 			return Response.json(response)
 		}
+		if (req.method === 'POST' && action === 'member') {
+			const parsed = memberUpdateSchema.safeParse(await req.json().catch(() => null))
+			if (!parsed.success)
+				return Response.json({ error: parsed.error.message }, { status: 400 })
+			await this.serially(() => this.updateMember(parsed.data))
+			return new Response(null, { status: 204 })
+		}
 		if (req.method === 'POST' && action === 'track') {
 			const parsed = trackSchema.safeParse(await req.json().catch(() => null))
 			if (!parsed.success)
@@ -88,7 +144,11 @@ export class Session extends PartyDbServer<Env> {
 	}
 
 	async onAlarm() {
-		await this.serially(() => this.rollOver())
+		await this.serially(async () => {
+			await this.rollOver()
+			await this.endIfEmpty()
+			await this.schedule()
+		})
 	}
 
 	private serially<T>(task: () => Promise<T>): Promise<T> {
@@ -97,26 +157,21 @@ export class Session extends PartyDbServer<Env> {
 		return next
 	}
 
+	// ---- the clock ----
+
 	private async run({ id, actor, command }: CommandRequest): Promise<CommandResponse> {
 		const serverAt = Date.now()
 		const current = this.readClock()
 		const next = apply(current?.clock ?? freshClock(), command, serverAt)
 		if (!next) return { serverAt, row: null }
-		const row = await this.write(current?.row ?? null, next, {
+		const row = await this.writeClock(current?.row ?? null, next, {
 			actor,
 			command,
 			commandId: id,
 			stampedAt: serverAt,
 		})
+		await this.schedule()
 		return { serverAt, row }
-	}
-
-	private async learn(track: Track) {
-		const [known] = this.ctx.storage.sql
-			.exec('SELECT id FROM tracks WHERE id = ?', track.id)
-			.toArray()
-		if (known || !(track.durationMs > 0)) return
-		await this.commit([{ channel: 'tracks', ops: [{ type: 'insert', value: track }] }])
 	}
 
 	private async rollOver() {
@@ -124,13 +179,43 @@ export class Session extends PartyDbServer<Env> {
 		const current = this.readClock()
 		if (!current) return
 		const next = apply(current.clock, { type: 'rollover' }, now)
-		if (!next) return this.schedule(current.clock)
-		await this.write(current.row, next, {
+		if (!next) return
+		await this.writeClock(current.row, next, {
 			actor: 'the clock',
 			command: { type: 'rollover' },
 			commandId: null,
 			stampedAt: now,
 		})
+	}
+
+	/** Everyone left and stayed away for a full work phase plus a break: the session is over. */
+	private async endIfEmpty() {
+		const emptySince = await this.ctx.storage.get<number>(EMPTY_SINCE)
+		const current = this.readClock()
+		if (emptySince === undefined || !current || this.openSockets().length > 0) return
+		const now = Date.now()
+		if (now < emptySince + graceOf(current.clock)) return
+		await this.ctx.storage.delete(EMPTY_SINCE)
+		const next = apply(current.clock, { type: 'end' }, now)
+		if (!next) return
+		await this.writeClock(current.row, next, {
+			actor: 'the clock',
+			command: { type: 'end' },
+			commandId: null,
+			stampedAt: now,
+		})
+	}
+
+	/** One alarm covers both jobs: the end of a running phase, and the end of an empty session. */
+	private async schedule() {
+		const clock = this.readClock()?.clock
+		const emptySince = await this.ctx.storage.get<number>(EMPTY_SINCE)
+		const times = [
+			clock?.endsAt ?? null,
+			emptySince !== undefined && clock ? emptySince + graceOf(clock) : null,
+		].filter((t): t is number => t !== null)
+		if (times.length === 0) await this.ctx.storage.deleteAlarm()
+		else await this.ctx.storage.setAlarm(Math.min(...times))
 	}
 
 	private readClock(): { row: ClockRow; clock: Clock } | null {
@@ -147,7 +232,7 @@ export class Session extends PartyDbServer<Env> {
 		return { row, clock: { phase, endsAt, remainingMs, durations, playlist } }
 	}
 
-	private async write(
+	private async writeClock(
 		previous: ClockRow | null,
 		clock: Clock,
 		change: {
@@ -170,13 +255,59 @@ export class Session extends PartyDbServer<Env> {
 		await this.commit([
 			{ channel: 'clock', ops: [{ type: previous ? 'update' : 'insert', value: row }] },
 		])
-		await this.schedule(clock)
 		return row
 	}
 
-	/** The alarm fires at the end of a running phase; a stopped clock needs none. */
-	private async schedule(clock: Clock) {
-		if (clock.endsAt === null) await this.ctx.storage.deleteAlarm()
-		else await this.ctx.storage.setAlarm(clock.endsAt)
+	// ---- members ----
+
+	/** The sockets still open, leaving out one that is closing right now. */
+	private openSockets(closingId?: string) {
+		return [...this.getConnections<SocketState>()].filter((c) => c.id !== closingId)
+	}
+
+	private readMember(id: string): Member | null {
+		const [raw] = this.ctx.storage.sql
+			.exec('SELECT * FROM members WHERE id = ?', id)
+			.toArray()
+		return raw ? memberSchema.parse({ ...raw, here: Boolean(raw.here) }) : null
+	}
+
+	private async writeMember(previous: Member | null, member: Member) {
+		await this.commit([
+			{
+				channel: 'members',
+				ops: [{ type: previous ? 'update' : 'insert', value: member }],
+			},
+		])
+	}
+
+	/** A member is here while any of their devices has a socket open. */
+	private async markPresence(memberId: string, closingId?: string) {
+		const member = this.readMember(memberId)
+		if (!member) return // their first details will arrive through POST .../member
+		const here = this.openSockets(closingId).some((c) => c.state?.memberId === memberId)
+		if (here === member.here) return
+		await this.writeMember(member, { ...member, here, seenAt: Date.now() })
+	}
+
+	private async updateMember(update: { id: string; name: string; intention: string }) {
+		const member = this.readMember(update.id)
+		const here = this.openSockets().some((c) => c.state?.memberId === update.id)
+		if (member && member.name === update.name && member.intention === update.intention)
+			return
+		await this.writeMember(member, { ...update, here, seenAt: Date.now() })
+	}
+
+	// ---- tracks ----
+
+	private async learn(track: Track) {
+		const [known] = this.ctx.storage.sql
+			.exec('SELECT id FROM tracks WHERE id = ?', track.id)
+			.toArray()
+		if (known || !(track.durationMs > 0)) return
+		await this.commit([{ channel: 'tracks', ops: [{ type: 'insert', value: track }] }])
 	}
 }
+
+/** How long an empty session keeps going: one full work phase plus one break. */
+const graceOf = (clock: Clock) => clock.durations.work + clock.durations.break

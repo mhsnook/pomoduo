@@ -11,10 +11,18 @@ import {
 } from 'lucide-react'
 import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react'
 
-import { isFresh, type MemberCommand, type Phase, PHASES } from '../shared/clock'
+import {
+	isFresh,
+	type MemberCommand,
+	otherPhase,
+	type Phase,
+	PHASES,
+	placeIn,
+} from '../shared/clock'
 import type { ClockRow } from '../shared/schema'
 import { Clock } from './components/Clock'
 import { Ledger } from './components/Ledger'
+import { Members } from './components/Members'
 import { PhaseVideo } from './components/PhaseVideo'
 import { EditPomoDialog, ReviewDialog } from './components/PomoDialogs'
 import {
@@ -33,9 +41,11 @@ import {
 	lastUnreviewed,
 	loadDay,
 	loadIntention,
+	pauseWork,
 	type Pomo,
 	readPomos,
 	resolveDay,
+	resumeWork,
 	saveDay,
 	saveIntention,
 	savePomos,
@@ -49,11 +59,19 @@ import type { YTPlayer } from './lib/youtube'
 import { SessionConnection, type SessionEvent } from './session/connection'
 
 /** One press of the jump controls moves the clock and the video this far. */
-const JUMP_MS = 10_000
+const JUMP_MS = 60_000
 /** One press of the longer and shorter controls changes the phase by this much. */
 const STRETCH_MS = 60_000
 /** Long enough for a player told to play to have reached playing or buffering. */
 const PLAYBACK_CHECK_MS = 1_500
+/**
+ * A player's own play or pause counts as a click on the video only when it
+ * contradicts what the page last told that player, and not this soon after.
+ * Players report the page's own requests a little late.
+ */
+const TOLD_GRACE_MS = 800
+/** How long the intention waits for typing to stop before the session hears it. */
+const MEMBER_UPDATE_MS = 400
 
 const MINUTES_LABEL: Record<Phase, string> = {
 	work: 'Work minutes',
@@ -84,7 +102,7 @@ function describe(change: Pick<ClockRow, 'actor' | 'command' | 'deltaMs'>) {
 		case 'pause':
 			return `${change.actor} paused`
 		case 'nudge':
-			return `${change.actor} jumped ${change.deltaMs < 0 ? 'back' : 'forward'} ${seconds}s`
+			return `${change.actor} jumped ${change.deltaMs < 0 ? 'back' : 'forward'} ${seconds >= 60 ? `${minutes}m` : `${seconds}s`}`
 		case 'stretch':
 			return `${change.actor} made this ${minutes}m ${change.deltaMs < 0 ? 'shorter' : 'longer'}`
 		case 'skip':
@@ -93,6 +111,8 @@ function describe(change: Pick<ClockRow, 'actor' | 'command' | 'deltaMs'>) {
 			return `${change.actor} started this one over`
 		case 'durations':
 			return `${change.actor} changed the lengths`
+		case 'end':
+			return 'Everyone left, so the session ended'
 		default:
 			return ''
 	}
@@ -139,7 +159,7 @@ function Session({
 	settings: Settings
 	updateSettings: (patch: Partial<Settings>) => void
 }) {
-	const { status, clock, lastChange } = useSyncExternalStore(
+	const { status, clock, lastChange, members } = useSyncExternalStore(
 		connection.subscribe,
 		connection.getState,
 	)
@@ -156,6 +176,16 @@ function Session({
 	)
 	const current = pomos.find((p) => p.end === null) ?? null
 
+	// the session hears this member's name and intention once typing stops
+	useEffect(() => {
+		if (status !== 'live') return
+		const id = setTimeout(
+			() => connection.updateMember({ name: settings.name, intention }),
+			MEMBER_UPDATE_MS,
+		)
+		return () => clearTimeout(id)
+	}, [connection, status, settings.name, intention])
+
 	const [review, setReview] = useState<Pomo | null>(null)
 	const [editing, setEditing] = useState<Pomo | null>(null)
 	const [askRollover, setAskRollover] = useState(false)
@@ -170,6 +200,14 @@ function Session({
 		break: { index: 0, startMs: 0, loadKey: 0 },
 	})
 	const players = useRef<Record<Phase, YTPlayer | null>>({ work: null, break: null })
+	/** What the page last asked of each player, and when. */
+	const told = useRef<Record<Phase, { want: 'play' | 'pause'; at: number } | null>>({
+		work: null,
+		break: null,
+	})
+	/** Whether each player has ever actually played: only one that has may stop the clock. */
+	const played = useRef<Record<Phase, boolean>>({ work: false, break: false })
+	const [confirmSwitch, setConfirmSwitch] = useState<Phase | null>(null)
 	const [playersReady, setPlayersReady] = useState(0)
 	const [musicBlocked, setMusicBlocked] = useState(false)
 
@@ -183,15 +221,42 @@ function Session({
 	useEffect(() => saveDay(day), [day])
 	useEffect(() => saveIntention(intention), [intention])
 
-	// Once the session's clock is known, end any pomo a closed tab left open,
-	// unless the clock is still in the work phase that pomo belongs to.
-	const tidied = useRef(false)
+	const newPomo = (now: number, running: boolean): Pomo => ({
+		id: crypto.randomUUID(),
+		day,
+		start: new Date(now).toISOString(),
+		end: null,
+		intention,
+		note: '',
+		confirmed: false,
+		workedMs: 0,
+		runningSince: running ? now : null,
+	})
+
+	// Once the session's clock is known: end any pomo a closed tab left open,
+	// unless the clock is still in the work phase it belongs to; bring the worked
+	// time up to date; and open a pomo if the clock is already running work.
+	const joined = useRef(false)
+	const onLive = useEffectEvent(() => {
+		const now = Date.now()
+		const inWork = clock.phase === 'work' && !isFresh(clock)
+		const tidy = closeAbandoned(pomos, clock.durations.work, inWork, now)
+		const open = tidy.find((p) => p.end === null)
+		if (open) {
+			const since = Math.min(now, lastChange?.stampedAt ?? now)
+			const caughtUp = running ? resumeWork(open, now) : pauseWork(open, since)
+			setPomos(tidy.map((p) => (p === open ? caughtUp : p)))
+		} else if (clock.phase === 'work' && running) {
+			setPomos([...tidy, newPomo(now, true)])
+		} else {
+			setPomos(tidy)
+		}
+	})
 	useEffect(() => {
-		if (status !== 'live' || tidied.current) return
-		tidied.current = true
-		const keepLastOpen = clock.phase === 'work' && !isFresh(clock)
-		setPomos((ps) => closeAbandoned(ps, clock.durations.work, keepLastOpen, Date.now()))
-	}, [status, clock])
+		if (status !== 'live' || joined.current) return
+		joined.current = true
+		onLive()
+	}, [status])
 
 	// The ledger and the video react to the clock, whoever moved it.
 	const patchPomo = (id: string, patch: Partial<Pomo>) =>
@@ -203,15 +268,7 @@ function Session({
 	const openPomo = (now: number) => {
 		if ((opened.current === undefined ? current : opened.current) !== null) return
 		if (straddlesRollover(day, pomos, now)) setAskRollover(true)
-		const pomo: Pomo = {
-			id: crypto.randomUUID(),
-			day,
-			start: new Date(now).toISOString(),
-			end: null,
-			intention,
-			note: '',
-			confirmed: false,
-		}
+		const pomo = newPomo(now, true)
 		opened.current = pomo
 		setPomos((ps) => [...ps, pomo])
 	}
@@ -223,7 +280,7 @@ function Session({
 			setPomos((ps) => ps.filter((p) => p.id !== current.id))
 			return
 		}
-		const closed = { ...current, end: new Date(now).toISOString() }
+		const closed = { ...pauseWork(current, now), end: new Date(now).toISOString() }
 		patchPomo(current.id, closed)
 		setReview(closed)
 	}
@@ -236,44 +293,78 @@ function Session({
 			else if (command === 'start') sounds.beep()
 			else sounds.click()
 
+			const wasRunning = before.endsAt !== null
+			const isRunning = after.endsAt !== null
 			if (before.phase === 'work' && after.phase === 'break') closePomo(now)
 			if (before.phase === 'break' && after.phase === 'work' && command === 'nudge') {
 				// jumping back out of a break takes back the pomo that break ended
 				const last = lastUnreviewed(pomos, day)
 				if (last) {
-					patchPomo(last.id, { end: null })
-					opened.current = { ...last, end: null }
+					const reopened = isRunning
+						? resumeWork({ ...last, end: null }, now)
+						: { ...last, end: null }
+					patchPomo(last.id, reopened)
+					opened.current = reopened
 					setReview((r) => (r?.id === last.id ? null : r))
 				}
 			}
-			if (after.phase === 'work' && after.endsAt !== null) openPomo(now)
+			// the worked time follows the clock's pauses and starts within work
+			if (before.phase === 'work' && after.phase === 'work' && current) {
+				if (wasRunning && !isRunning) patchPomo(current.id, pauseWork(current, now))
+				if (!wasRunning && isRunning) patchPomo(current.id, resumeWork(current, now))
+			}
+			if (after.phase === 'work' && isRunning) openPomo(now)
 		},
 	)
+
+	/** Play or pause a player, remembering that the page asked for it. */
+	const tell = (p: Phase, want: 'play' | 'pause') => {
+		const player = players.current[p]
+		if (!player) return
+		told.current[p] = { want, at: Date.now() }
+		try {
+			if (want === 'play') player.playVideo()
+			else player.pauseVideo()
+		} catch {
+			/* player went away */
+		}
+	}
+
+	/** Seek a player. seekTo starts a cued player, so a stopped one is told to stop again. */
+	const seek = (p: Phase, seconds: number, playing: boolean) => {
+		const player = players.current[p]
+		if (!player) return
+		try {
+			player.seekTo(Math.max(0, seconds), true)
+		} catch {
+			/* player went away mid-seek */
+		}
+		if (!playing) tell(p, 'pause')
+	}
+
+	/** Put a phase's playlist at a place, in ms from its start. */
+	const cue = (p: Phase, placeMs: number, playing: boolean) => {
+		const spot = placeToTrack(settings.videos[p], connection.lengthOf, placeMs)
+		if (!spot) return
+		if (players.current[p] && spot.index === tracks[p].index) {
+			seek(p, spot.offsetMs / 1000, playing)
+		} else {
+			setTracks((t) => ({
+				...t,
+				[p]: { index: spot.index, startMs: spot.offsetMs, loadKey: t[p].loadKey + 1 },
+			}))
+		}
+	}
 
 	/** Each command reaches the video once. Nothing else moves it. */
 	const onVideo = useEffectEvent(
 		(effect: Extract<SessionEvent, { type: 'video' }>['effect']) => {
 			const p = connection.getState().clock.phase
+			if (effect.cueAt !== undefined) cue(p, effect.cueAt, effect.playing)
 			const player = players.current[p]
-			if (effect.cueAt !== undefined) {
-				const spot = placeToTrack(settings.videos[p], connection.lengthOf, effect.cueAt)
-				if (!spot) return
-				if (player && spot.index === tracks[p].index) {
-					seek(player, spot.offsetMs / 1000, effect.playing)
-				} else {
-					setTracks((t) => ({
-						...t,
-						[p]: { index: spot.index, startMs: spot.offsetMs, loadKey: t[p].loadKey + 1 },
-					}))
-				}
-			}
 			if (effect.moveBy !== undefined && player) {
 				try {
-					seek(
-						player,
-						Math.max(0, player.getCurrentTime() + effect.moveBy / 1000),
-						effect.playing,
-					)
+					seek(p, player.getCurrentTime() + effect.moveBy / 1000, effect.playing)
 				} catch {
 					/* player went away mid-seek */
 				}
@@ -281,11 +372,22 @@ function Session({
 		},
 	)
 
+	/** Joining: both playlists go where the shared clock says, once. */
+	const onJoin = useEffectEvent(
+		({ clock: joinedAt, now }: Extract<SessionEvent, { type: 'join' }>) => {
+			const other = otherPhase(joinedAt.phase)
+			cue(joinedAt.phase, placeIn(joinedAt, now), joinedAt.endsAt !== null)
+			cue(other, Math.max(0, joinedAt.playlist[other]), false)
+		},
+	)
+
 	useEffect(
 		() =>
-			connection.onEvent((event) =>
-				event.type === 'change' ? onChange(event) : onVideo(event.effect),
-			),
+			connection.onEvent((event) => {
+				if (event.type === 'change') onChange(event)
+				else if (event.type === 'video') onVideo(event.effect)
+				else onJoin(event)
+			}),
 		[connection],
 	)
 
@@ -296,7 +398,7 @@ function Session({
 			const player = players.current[p]
 			if (!player) continue
 			if (p === phase && running) {
-				player.playVideo()
+				tell(p, 'play')
 				// a page that has not been clicked yet is not allowed to start audio,
 				// and the refusal is silent: ask the player afterwards whether it took
 				check = setTimeout(
@@ -304,7 +406,7 @@ function Session({
 					PLAYBACK_CHECK_MS,
 				)
 			} else {
-				player.pauseVideo()
+				tell(p, 'pause')
 			}
 		}
 		return () => clearTimeout(check)
@@ -314,7 +416,7 @@ function Session({
 	const showMusicBlocked = musicBlocked && running
 	useEffect(() => {
 		if (!showMusicBlocked) return
-		const retry = () => players.current[phase]?.playVideo()
+		const retry = () => tell(phase, 'play')
 		window.addEventListener('pointerdown', retry)
 		window.addEventListener('keydown', retry)
 		return () => {
@@ -328,17 +430,46 @@ function Session({
 	const setTrack = (p: Phase, index: number) =>
 		setTracks((t) => ({ ...t, [p]: { index, startMs: 0, loadKey: t[p].loadKey + 1 } }))
 
-	const onPlayerState = (p: Phase, state: number) => {
+	const onPlayerState = useEffectEvent((p: Phase, state: number) => {
 		const YT = window.YT!
 		const player = players.current[p]
-		if (state === YT.PlayerState.PLAYING && player) {
-			if (p === phase) setMusicBlocked(false)
+		if (!player) return
+		if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.CUED) {
 			const videoId = settings.videos[p][tracks[p].index % settings.videos[p].length]
 			if (videoId) connection.learnLength(videoId, player.getDuration() * 1000)
 		}
-		if (state === YT.PlayerState.ENDED)
+		if (state === YT.PlayerState.PLAYING) {
+			played.current[p] = true
+			if (p === phase) setMusicBlocked(false)
+		}
+		if (state === YT.PlayerState.ENDED) {
 			setTrack(p, (tracks[p].index + 1) % settings.videos[p].length)
-	}
+			return
+		}
+		// The video's own play and pause drive the clock, but only when they go
+		// against what the page last told the player: those are clicks on the video.
+		const last = told.current[p]
+		const recent = last !== null && Date.now() - last.at < TOLD_GRACE_MS
+		if (p !== phase) {
+			if (state !== YT.PlayerState.PLAYING || (recent && last.want === 'play')) return
+			// playing the other phase's video asks to switch to that phase
+			tell(p, 'pause')
+			if (running) setConfirmSwitch(p)
+			else press({ type: 'skip' })
+			return
+		}
+		if (recent) return
+		if (state === YT.PlayerState.PLAYING && !running && last?.want !== 'play') {
+			press({ type: 'start' })
+		} else if (
+			state === YT.PlayerState.PAUSED &&
+			running &&
+			played.current[p] &&
+			last?.want !== 'pause'
+		) {
+			press({ type: 'pause' })
+		}
+	})
 
 	const registerPlayer = (p: Phase, player: YTPlayer | null) => {
 		players.current[p] = player
@@ -474,8 +605,8 @@ function Session({
 							<TransportButton
 								id="pomo-back"
 								testId="back-button"
-								label="Back 10 seconds"
-								title="Back 10 seconds, music and all"
+								label="Back a minute"
+								title="Back a minute, music and all"
 								onClick={() => press({ type: 'nudge', deltaMs: -JUMP_MS })}
 								className="size-11"
 							>
@@ -498,8 +629,8 @@ function Session({
 							<TransportButton
 								id="pomo-forward"
 								testId="forward-button"
-								label="Forward 10 seconds"
-								title="Forward 10 seconds, music and all"
+								label="Forward a minute"
+								title="Forward a minute, music and all"
 								onClick={() => press({ type: 'nudge', deltaMs: JUMP_MS })}
 								className="size-11"
 							>
@@ -520,6 +651,8 @@ function Session({
 						</p>
 					</div>
 
+					<Members members={members} you={connection.memberId} />
+
 					<SettingInput
 						testId="intention-input"
 						className="mx-auto w-full max-w-xl"
@@ -538,7 +671,7 @@ function Session({
 							<button
 								type="button"
 								data-testid="resume-music"
-								onClick={() => players.current[phase]?.playVideo()}
+								onClick={() => tell(phase, 'play')}
 								className="btn btn-outline rounded-full"
 							>
 								▶ Bring the music back
@@ -694,6 +827,37 @@ function Session({
 				/>
 			)}
 
+			{confirmSwitch && (
+				<Modal testId="confirm-switch-dialog" onDismiss={() => setConfirmSwitch(null)}>
+					<h2 className="font-display text-2xl">
+						{confirmSwitch === 'break'
+							? 'End the pomo and start the break?'
+							: 'End the break and get back to work?'}
+					</h2>
+					<p className="text-sm opacity-75">This switches the clock for everyone here.</p>
+					<div className="modal-action">
+						<button
+							type="button"
+							className="btn btn-outline"
+							onClick={() => setConfirmSwitch(null)}
+						>
+							No, stay
+						</button>
+						<button
+							type="button"
+							data-testid="confirm-switch-yes"
+							className="btn btn-primary"
+							onClick={() => {
+								if (phase !== confirmSwitch) press({ type: 'skip' })
+								setConfirmSwitch(null)
+							}}
+						>
+							Yes, switch
+						</button>
+					</div>
+				</Modal>
+			)}
+
 			{askRollover && (
 				<Modal testId="rollover-dialog" onDismiss={() => setAskRollover(false)}>
 					<h2 className="font-display text-2xl">It’s past 4am</h2>
@@ -727,14 +891,4 @@ function Session({
 			)}
 		</div>
 	)
-}
-
-/** Seek a player. seekTo starts a cued player, so a stopped one is told to stop again. */
-function seek(player: YTPlayer, seconds: number, playing: boolean) {
-	try {
-		player.seekTo(seconds, true)
-		if (!playing) player.pauseVideo()
-	} catch {
-		/* player went away mid-seek */
-	}
 }

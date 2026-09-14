@@ -100,6 +100,28 @@ Found while building:
 - Pressing play or pause inside a YouTube video no longer drives the clock, as
   it did in pomodance. In a session it would stop everyone's clock by accident.
 
+Em tried it with two browsers on 2026-09-14 and found:
+
+- The jumps were 10 seconds; they are a minute, as in pomodance.
+- Nowhere showed who else was in the session. Members now show with their
+  name, their intention, and whether they are here, which is
+  [What you see of your friend](user-stories.md#what-you-see-of-your-friend).
+- A member who joined mid-work got no review when someone skipped, because
+  joining never opened a pomo. It does now.
+- The ledger counted a pomo from start to end, pauses and all. It now counts
+  the time the clock ran.
+- Pressing play or pause on the video did nothing to the clock. It drives the
+  clock again, and playing the other phase's video asks to switch.
+- One video was far ahead of the other on joining. Two causes, both fixed:
+  a jump back into a phase that had ended early cued the video as if that
+  phase had run its full length; and a device could cue its first video before
+  the track lengths had arrived. A device now waits for them, and puts both
+  playlists in place on joining.
+- Rooms nobody was in kept rolling over forever: one test room flipped
+  phases 905 times. A session now ends a full work phase plus a break after
+  the last member leaves, as [Session lifecycle](user-stories.md#session-lifecycle)
+  says.
+
 Still open: real devices on real networks. That needs the Worker deployed
 and a real session with a friend, which is Em's step.
 

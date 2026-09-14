@@ -8,7 +8,7 @@ import {
 	type PomoDraft,
 	pomoFromDraft,
 } from '../lib/ledger'
-import { fmtTime, minutesBetween } from './time'
+import { fmtTime, workedMinutes } from './time'
 import { Modal, SettingInput, Toggle } from './ui'
 
 export function ReviewDialog({
@@ -31,8 +31,7 @@ export function ReviewDialog({
 				className="flex flex-col gap-4"
 			>
 				<h2 className="font-display text-2xl">
-					Pomo done: {minutesBetween(pomo.start, pomo.end!)}m, started{' '}
-					{fmtTime(pomo.start)}
+					Pomo done: {workedMinutes(pomo)}m, started {fmtTime(pomo.start)}
 				</h2>
 				<p className="text-sm opacity-75">
 					{pomo.intention

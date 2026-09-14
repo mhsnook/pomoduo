@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 
 import { cn } from '../lib/format'
 import { dayLabel, dayTotals, formatDuration, pastDays, type Pomo } from '../lib/ledger'
-import { fmtTime, minutesBetween } from './time'
+import { fmtTime, workedMinutes } from './time'
 
 export const Ledger = memo(function Ledger({
 	pomos,
@@ -174,7 +174,7 @@ function PomoList({ pomos, onEdit }: { pomos: Pomo[]; onEdit: (pomo: Pomo) => vo
 					<div className="font-ui flex justify-between gap-2 text-xs tabular-nums opacity-70">
 						<span>
 							{fmtTime(p.start)} – {p.end ? fmtTime(p.end) : 'now'}
-							{p.end && ` · ${minutesBetween(p.start, p.end)}m`}
+							{p.end && ` · ${workedMinutes(p)}m`}
 						</span>
 						<span className="flex items-center gap-1">
 							<span

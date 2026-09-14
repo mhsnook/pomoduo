@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-	apply,
-	type Clock,
-	freshClock,
-	joinEffect,
-	remainingIn,
-	videoEffect,
-} from './clock'
+import { apply, type Clock, freshClock, placeIn, remainingIn, videoEffect } from './clock'
 
 const durations = { work: 60_000, break: 20_000 }
 const T = 1_000_000
@@ -63,6 +56,22 @@ describe('a jump back past the start', () => {
 		expect(
 			videoEffect(clock, after, { type: 'nudge', deltaMs: -10_000 }, T + 4_000).cueAt,
 		).toBe(34_000)
+	})
+})
+
+describe('a jump back into a phase that ended early', () => {
+	it('brings the video back to where it stopped, not to where a full phase would have reached', () => {
+		// work was skipped 11 minutes in: its playlist stopped at 11:00
+		const lengths = { work: 25 * 60_000, break: 5 * 60_000 }
+		const started = apply(freshClock(lengths), { type: 'start' }, T)!
+		const inBreak = apply(started, { type: 'skip' }, T + 11 * 60_000)!
+		expect(inBreak.playlist.work).toBe(11 * 60_000)
+		const now = T + 11 * 60_000 + 3_000
+		const back = apply(inBreak, { type: 'nudge', deltaMs: -60_000 }, now)!
+		expect(back.phase).toBe('work')
+		expect(remainingIn(back, now)).toBe(57_000)
+		const effect = videoEffect(inBreak, back, { type: 'nudge', deltaMs: -60_000 }, now)
+		expect(effect.cueAt).toBe(11 * 60_000 - 57_000)
 	})
 })
 
@@ -153,9 +162,23 @@ describe('reset and durations', () => {
 	})
 })
 
-describe('joining', () => {
-	it('starts the video where the clock is', () => {
+describe('placeIn', () => {
+	it('is where the current playlist is now, for a device that joins', () => {
 		const clock = { ...running(), playlist: { work: 90_000, break: 0 } }
-		expect(joinEffect(clock, T + 12_000)).toEqual({ cueAt: 102_000, playing: true })
+		expect(placeIn(clock, T + 12_000)).toBe(102_000)
+	})
+
+	it('never points before the start of the playlist', () => {
+		const clock = { ...running(), playlist: { work: -50_000, break: 0 } }
+		expect(placeIn(clock, T + 12_000)).toBe(0)
+	})
+})
+
+describe('end', () => {
+	it('puts the session back at the top of work, stopped, and keeps each playlist place', () => {
+		const inBreak = apply(running(), { type: 'skip' }, T + 30_000)!
+		const ended = apply(inBreak, { type: 'end' }, T + 35_000)!
+		expect(ended).toMatchObject({ phase: 'work', endsAt: null, remainingMs: 60_000 })
+		expect(ended.playlist).toEqual({ work: 30_000, break: 5_000 })
 	})
 })

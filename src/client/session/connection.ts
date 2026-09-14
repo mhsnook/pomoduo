@@ -6,7 +6,6 @@ import {
 	type Clock,
 	type Command,
 	freshClock,
-	joinEffect,
 	type MemberCommand,
 	type VideoEffect,
 	videoEffect,
@@ -17,9 +16,12 @@ import {
 	clockRowSchema,
 	type CommandRequest,
 	type CommandResponse,
+	type Member,
+	memberSchema,
 	type Track,
 	trackSchema,
 } from '../../shared/schema'
+import { memberId } from '../lib/member'
 import { firstSync, resync, type ServerTime, serverNowOf } from '../lib/server-time'
 
 /** Something the page should react to, beyond re-rendering. */
@@ -28,13 +30,17 @@ export type SessionEvent =
 	| { type: 'change'; before: Clock; after: Clock; command: Command['type'] }
 	/** What the change asks of this device's video. Sent once per command. */
 	| { type: 'video'; effect: VideoEffect }
+	/** This device just joined: put both playlists where the clock says. */
+	| { type: 'join'; clock: Clock; now: number }
 
 export type SessionState = {
 	status: 'connecting' | 'live'
 	/** What this device shows: the room's clock, or this device's own prediction. */
 	clock: Clock
+	/** Everyone who has been in this session, and whether they are here now. */
+	members: Member[]
 	/** Who made the room's last change, for the byline under the clock. */
-	lastChange: Pick<ClockRow, 'actor' | 'command' | 'deltaMs'> | null
+	lastChange: Pick<ClockRow, 'actor' | 'command' | 'deltaMs' | 'stampedAt'> | null
 }
 
 const clockOf = ({
@@ -67,12 +73,15 @@ export class SessionConnection {
 	private readonly party: ReturnType<typeof createPartyDb>
 	private readonly clocks: Collection<ClockRow, string>
 	private readonly tracks: Collection<Track, string>
+	private readonly members: Collection<Member, string>
+	readonly memberId: string
 
 	private time: ServerTime = { offset: Date.now() - performance.now(), rtt: 0 }
 	private row: ClockRow | null = null
 	private state: SessionState = {
 		status: 'connecting',
 		clock: freshClock(),
+		members: [],
 		lastChange: null,
 	}
 	/** Every command this device sent, so it knows its own when one comes back. */
@@ -93,15 +102,19 @@ export class SessionConnection {
 		private readonly actor: () => string,
 	) {
 		this.base = `/parties/session/${encodeURIComponent(sessionId)}`
+		// set before the socket opens: its upgrade carries the member cookie
+		this.memberId = memberId()
 		this.party = createPartyDb(
 			partyTransport({ host: location.host, party: 'session', room: sessionId }),
 			[
 				definePartyCollection({ name: 'clock', key: 'id', schema: clockRowSchema }),
+				definePartyCollection({ name: 'members', key: 'id', schema: memberSchema }),
 				definePartyCollection({ name: 'tracks', key: 'id', schema: trackSchema }),
 			],
 		)
 		this.clocks = this.party.db.clock as unknown as Collection<ClockRow, string>
 		this.tracks = this.party.db.tracks as unknown as Collection<Track, string>
+		this.members = this.party.db.members as unknown as Collection<Member, string>
 		void this.open()
 	}
 
@@ -111,15 +124,23 @@ export class SessionConnection {
 			serverAt: number
 		}
 		this.time = firstSync(sentAt, serverAt, performance.now())
-		const rows = await this.clocks.toArrayWhenReady()
+		// The video lengths have to be here before the first cue, or it lands in the wrong track.
+		const [rows] = await Promise.all([
+			this.clocks.toArrayWhenReady(),
+			this.tracks.toArrayWhenReady(),
+			this.members.toArrayWhenReady(),
+		])
 		if (this.closed) return
 		const row = rows.find((r) => r.id === CLOCK_ROW_ID) ?? null
 		if (row) {
 			this.row = row
 			this.setState({ clock: clockOf(row), lastChange: row })
 		}
-		this.setState({ status: 'live' })
-		this.emit({ type: 'video', effect: joinEffect(this.state.clock, this.serverNow()) })
+		this.setState({ status: 'live', members: [...this.members.values()] })
+		const memberChanges = this.members.subscribeChanges(() =>
+			this.setState({ members: [...this.members.values()] }),
+		)
+		this.emit({ type: 'join', clock: this.state.clock, now: this.serverNow() })
 		const subscription = this.clocks.subscribeChanges((changes) => {
 			const receivedAt = performance.now()
 			for (const change of changes) {
@@ -127,7 +148,10 @@ export class SessionConnection {
 				this.receive(change.value, { serverAt: change.value.stampedAt, receivedAt })
 			}
 		})
-		this.unsubscribe = () => subscription.unsubscribe()
+		this.unsubscribe = () => {
+			subscription.unsubscribe()
+			memberChanges.unsubscribe()
+		}
 		this.armRollover()
 	}
 
@@ -226,6 +250,15 @@ export class SessionConnection {
 			},
 			Math.max(0, endsAt - this.serverNow()),
 		)
+	}
+
+	/** Tell the session this member's name and what they are working on. */
+	updateMember(details: { name: string; intention: string }) {
+		void fetch(`${this.base}/member`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ id: this.memberId, ...details }),
+		}).catch((error) => console.error(error))
 	}
 
 	/** A video's length, if any member's player has loaded it. */

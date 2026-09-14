@@ -59,5 +59,27 @@ export const trackSchema = z.object({
 })
 export type Track = z.infer<typeof trackSchema>
 
+/** A member of the session: who they are, what they are working on, and whether they are here. */
+export const memberSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	intention: z.string(),
+	/** Whether this member has a device connected to the session right now. */
+	here: z.boolean(),
+	/** Server time when this member last connected, left, or changed their details. */
+	seenAt: z.number(),
+})
+export type Member = z.infer<typeof memberSchema>
+
+/** What a device sends to set its member's name and intention. */
+export const memberUpdateSchema = z.object({
+	id: z.string().min(1).max(64),
+	name: z.string().max(40),
+	intention: z.string().max(500),
+})
+
+/** The cookie that carries a device's member id on the socket upgrade. */
+export const MEMBER_COOKIE = 'pomoduo-member'
+
 /** What the command endpoint answers: server time, and the row the command made, if any. */
 export type CommandResponse = { serverAt: number; row: ClockRow | null }

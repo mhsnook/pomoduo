@@ -15,7 +15,7 @@ the same moment.
 
 Every clock command is one of two kinds:
 
-- **Relative**: jump ±10s, pause, resume. It acts on wherever the clock is.
+- **Relative**: jump ±1 minute, pause, resume. It acts on wherever the clock is.
 - **Fresh**: skip to the next phase, or a forward jump that would run past
   the end of this one. It starts the next phase from the top.
 
@@ -85,6 +85,13 @@ video by the jump. Pause and resume stop and start it. A command or rollover
 that changes the phase starts the new phase's playlist at its shared place,
 at the point the clock has reached. Joining starts the video where the clock
 is.
+
+A click on the video is a command too. Pausing or playing the current
+phase's video pauses or starts the clock for everyone, as in pomodance.
+Playing the other phase's video asks to switch to that phase. A player's own
+state changes count as clicks only when they go against what the page last
+told that player, so the page's own play and pause never loop back into
+commands.
 
 Nothing corrects a video afterwards. A video that started late, fell behind
 while buffering, or paused a few hundred milliseconds before the clock did

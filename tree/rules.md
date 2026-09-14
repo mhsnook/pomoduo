@@ -11,13 +11,38 @@ its timer. It also holds each playlist's place. The commands (start, pause, nudg
 member's device follows them on its own, and every member's clock finishes at
 the same moment.
 
+### Commands are relative or fresh
+
+Every clock command is one of two kinds:
+
+- **Relative**: jump ±10s, pause, resume. It acts on wherever the clock is.
+- **Fresh**: skip to the next phase. It starts that phase from the top.
+
+The goal is that every member's timer finishes a phase at the same moment,
+because that is when the call opens or closes. Videos may drift a little
+between members, and that is fine.
+
 ### Keeping clocks in step
 
-Every command passes through the session's Durable Object, which stamps it
-with server time and the member who sent it. The DO also flips the phase
-itself when the end time passes, and chains the next end time from the exact
-old end, so a late alarm adds no drift. Nothing is negotiated between
-members, because everyone reads one clock.
+The presser's device applies a command the moment it is pressed. The command
+then goes to the session's Durable Object, which applies it when it arrives,
+stamps it with server time and the member who sent it, and sends the result
+to everyone. The DO also flips the phase itself when the end time passes,
+chaining the next end time from the exact old end.
+
+Only the timer settles. When the DO's answer comes back, the presser's timer
+takes the DO's end time. For a jump that changes nothing, because a jump
+moves the end time by the same amount whenever it is applied. For a pause,
+resume, or skip it moves the timer by about the one-way network delay. While
+more of the presser's commands are still on the way, the timer keeps showing
+the presser's own prediction, and it settles once when the last is answered.
+Everyone else's timer reads the DO's end time as soon as the command reaches
+them, so a skip that arrives 300 ms late starts the break at 24.7 seconds
+instead of 25.
+
+If someone else's command lands between your press and its answer, your
+timer shows their change without yours for a moment, then both. This only
+happens when two people press within one round trip of each other.
 
 A device never reads its own wall clock for the session. It counts with its
 steady timer (`performance.now()` in a browser), which does not jump when the
@@ -31,6 +56,10 @@ device corrects its wall clock, and keeps an offset to server time:
   a tab that was suspended, or a network path slower one way than the other.
 - There is no ping. The session's own messages are enough.
 
+Each device also flips its own phase when its own timer reaches zero, without
+waiting for the DO. Because both chain from the same end time, they land on
+the same next phase.
+
 ### Playlists keep their place
 
 Each playlist carries on from where it stopped, across pomos, as in
@@ -41,15 +70,21 @@ the phase. A nudge moves the video with the clock, and a nudge across a phase
 boundary runs one playlist out to the edge and picks the other up where it
 stopped, as pomodance's scrub does.
 
-### Videos seek only at changes
+### A video moves once per command
 
-A device seeks its video only when the clock changes: start, pause, nudge,
-skip, a new phase, or joining. It seeks only when the video is more than half
-a second from where it belongs. Between changes the video plays on its own,
-and a video that falls behind while buffering stays behind until the next
-change. Calls already carry a few hundred milliseconds of delay, so tighter
-sync would not be heard, and a video that jumps around is worse than one
-that is a little late. An offset correction never seeks a video.
+Each device applies each command to its own video exactly once: the presser
+at the press, everyone else when the command reaches them. A jump moves the
+video by the jump. Pause and resume stop and start it. A command or rollover
+that changes the phase starts the new phase's playlist at its shared place,
+at the point the clock has reached. Joining starts the video where the clock
+is.
+
+Nothing corrects a video afterwards. A video that started late, fell behind
+while buffering, or paused a few hundred milliseconds before the clock did
+stays where it is. It lines up again when the next phase starts. Calls
+already carry a few hundred milliseconds of delay, so tighter sync would not
+be heard, and a video that jumps twice for one press is worse than one that
+is a little off.
 
 ### Who controls the clock
 

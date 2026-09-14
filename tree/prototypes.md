@@ -21,7 +21,7 @@ someone nudges? What did the model in the tree get wrong?
 Asset: `prototypes/shared-clock.html` on the `prototype/shared-clock` branch.
 One file, double-click to open. Two simulated devices with adjustable wall
 clocks, timer hiccups, and network delay, a simulated Durable Object between
-them, real time, and seven guided walkthroughs. The pure module inside it,
+them, real time, and eight guided walkthroughs. The pure module inside it,
 `PomoClock`, is the part worth lifting.
 
 Version 1 surfaced these, and each is now a rule:
@@ -31,19 +31,30 @@ Version 1 surfaced these, and each is now a rule:
   See [Keeping clocks in step](rules.md#keeping-clocks-in-step).
 - The video followed the time into the phase, so every phase restarted the
   song. See [Playlists keep their place](rules.md#playlists-keep-their-place).
-- Nobody had said when videos seek. See
-  [Videos seek only at changes](rules.md#videos-seek-only-at-changes).
-- Nobody had said who flips the phase. The DO does, from its alarm.
+- Nobody had said who flips the phase. The DO does, and so does each device,
+  from the same end time.
+
+Version 2 surfaced these, and each is now a rule:
+
+- The presser waited a full round trip to see their own press. Now the
+  presser applies it at once. See [Keeping clocks in step](rules.md#keeping-clocks-in-step).
+- Re-syncing videos on every change would make a video jump twice for one
+  press. Now a video moves once per command and is never corrected. See
+  [A video moves once per command](rules.md#a-video-moves-once-per-command).
+
+Version 3, checked in headless Chrome: every device reaches zero within
+0.05 s of the DO in every walkthrough, and that is the page's own tick.
+Double-pressing −10s on a 1.5 s link shows at once, jumps each video once
+per press, and settles by 0.00 s. A skip that reaches the phone 1.5 s late
+starts its break at 18.5 s.
 
 A display cap at the phase length was considered and dropped. Pomodance's
-"longer" button makes a phase legitimately longer than its length, and with
-the offset corrected the cap has nothing left to hide.
+"longer" button makes a phase legitimately longer than its length.
 
-Still open in version 2:
+Still open:
 
-- Devices apply nothing locally. They show only the row the DO sent back, so
-  on a slow link your own press lags by a round trip. The walkthrough "Pause
-  and nudge cross in the post" is where to feel whether that is fine.
+- Whether the brief flicker when two people's presses cross is acceptable in
+  use. It is the walkthrough "Presses that cross".
 - The real transport is not tested here. That is the first implementation,
   not a prototype.
 

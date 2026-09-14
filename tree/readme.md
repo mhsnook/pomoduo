@@ -76,14 +76,18 @@ the product; the pair is.
 - [The general room](architecture.md#the-general-room): a second room of
   user-owned tables holds pomos and settings, so a person is the same on
   every device.
-- [Keeping clocks in step](rules.md#keeping-clocks-in-step): the DO stamps
-  every command and flips the phase; devices count with a steady timer and
+- [Commands are relative or fresh](rules.md#commands-are-relative-or-fresh):
+  the goal is that timers finish together, because that is when the call
+  changes. Videos may drift.
+- [Keeping clocks in step](rules.md#keeping-clocks-in-step): the presser
+  applies a command at once; the DO applies it on arrival and everyone's
+  timer settles to the DO's end time. Devices count with a steady timer and
   correct drift over 100 ms from messages they already get. No ping.
 - [Playlists keep their place](rules.md#playlists-keep-their-place): each
   playlist carries on across pomos, and the clock row holds its place.
-- [Videos seek only at changes](rules.md#videos-seek-only-at-changes): a
-  video seeks on start, pause, nudge, skip, a new phase, or joining, and
-  otherwise plays on its own.
+- [A video moves once per command](rules.md#a-video-moves-once-per-command):
+  on each device, at the press or on arrival, and is never corrected. It
+  lines up again at the next phase.
 - [The call](rules.md#voice): opens at session start, on a yap break, and on
   a knock; closes when work starts; cuts on "3, 2, 1, beep" at the end of a
   break.

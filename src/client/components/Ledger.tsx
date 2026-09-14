@@ -32,10 +32,7 @@ export const Ledger = memo(function Ledger({
 	}
 
 	return (
-		<aside
-			data-testid="ledger"
-			className="flex flex-col gap-3 text-sm lg:border-l lg:border-current/20 lg:pl-6"
-		>
+		<section data-testid="ledger" className="flex flex-col gap-3">
 			{!browsing && (
 				<>
 					<LedgerHeading
@@ -109,7 +106,7 @@ export const Ledger = memo(function Ledger({
 					<PomoList pomos={viewing.pomos} onEdit={onEdit} />
 				</>
 			)}
-		</aside>
+		</section>
 	)
 })
 

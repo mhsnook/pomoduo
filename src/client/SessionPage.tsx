@@ -513,12 +513,7 @@ function Session({
 				settings.lessMotion && 'is-calm',
 			)}
 		>
-			<div
-				className={cn(
-					'grid flex-1 gap-6 p-6',
-					settings.showLedger && 'lg:grid-cols-[1fr_20rem]',
-				)}
-			>
+			<div className="grid flex-1 gap-6 p-6 lg:grid-cols-[1fr_20rem]">
 				<div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
 					<header className="flex items-start justify-between gap-4">
 						<div className="flex flex-col gap-1">
@@ -651,8 +646,6 @@ function Session({
 						</p>
 					</div>
 
-					<Members members={members} you={connection.memberId} />
-
 					<SettingInput
 						testId="intention-input"
 						className="mx-auto w-full max-w-xl"
@@ -705,7 +698,10 @@ function Session({
 					</section>
 				</div>
 
-				{settings.showLedger && <Ledger pomos={pomos} day={day} onEdit={setEditing} />}
+				<aside className="flex flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
+					<Members members={members} you={connection.memberId} />
+					{settings.showLedger && <Ledger pomos={pomos} day={day} onEdit={setEditing} />}
+				</aside>
 			</div>
 
 			<footer className="font-ui px-6 pb-6 text-center text-xs opacity-60">

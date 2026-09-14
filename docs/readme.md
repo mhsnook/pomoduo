@@ -14,8 +14,9 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   the invite: anyone with the link joins the same session. A session works
   alone too. A session everyone has left ends after a full work phase plus a
   break, and the next visit starts at the top of work.
-- **Who is here.** Every member shows under the clock with their name, their
-  intention, and whether they are here or away.
+- **Who is here.** Every member shows at the top of the side column, above the
+  ledger, with their name, their intention, and whether they are here or away.
+  Hiding the ledger leaves the members in place.
 - **One shared clock.** Start, pause, jump a minute either way, make a phase a
   minute longer or shorter, start over, and skip. Any member can press
   anything, and everyone sees it, with a line under the clock saying who did

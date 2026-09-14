@@ -8,18 +8,15 @@ export function Members({ members, you }: { members: Member[]; you: string }) {
 		(a, b) => Number(b.here) - Number(a.here) || b.seenAt - a.seenAt,
 	)
 	return (
-		<section
-			data-testid="members"
-			aria-label="In this session"
-			className="font-ui text-sm"
-		>
-			<ul className="flex flex-wrap justify-center gap-2">
+		<section data-testid="members" className="flex flex-col gap-2">
+			<h2 className="font-display text-xl">In this session</h2>
+			<ul className="flex flex-col gap-2">
 				{sorted.map((member) => (
 					<li
 						key={member.id}
 						data-testid="member"
 						className={cn(
-							'flex max-w-xs min-w-40 flex-col gap-0.5 rounded-lg bg-white/10 px-3 py-2',
+							'font-ui flex flex-col gap-0.5 rounded-lg bg-white/10 px-3 py-2',
 							!member.here && 'opacity-50',
 						)}
 					>

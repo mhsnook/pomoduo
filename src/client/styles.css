@@ -206,8 +206,18 @@ body {
 	animation: pomo-tilt 1.2s ease-in-out infinite alternate;
 }
 
+/* The column, not the window, is what the dance floor has to fit into: at lg
+   the sidebar takes 20rem of the window, and sizing the dancers in vw spilled
+   them over it. Containment also stops anything in this column from widening
+   the grid track past the page. */
+.pomo-column {
+	container-type: inline-size;
+}
+
+/* Seven dancers and six gaps come to 11.2 times the font size, so the upper
+   bound keeps the row inside the column it is measured against. */
 .pomo-dancers {
-	font-size: clamp(2rem, 8vw, 5rem);
+	font-size: clamp(1.5rem, 8.5cqw, 5rem);
 	display: flex;
 	justify-content: center;
 	gap: 0.5em;

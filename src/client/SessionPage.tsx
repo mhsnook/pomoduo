@@ -595,7 +595,7 @@ function Session({
 			)}
 		>
 			<div className="grid flex-1 gap-6 p-6 lg:grid-cols-[1fr_20rem]">
-				<div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+				<div className="pomo-column mx-auto flex w-full max-w-4xl flex-col gap-6">
 					<header className="flex items-start justify-between gap-4">
 						<div className="flex flex-col gap-1">
 							<h1 className="font-display text-3xl">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { SettingInput } from './components/ui'
+import { IntentionInput } from './components/ui'
 import { SessionPage } from './SessionPage'
 
 /** A session lives at /s/<id>. The address is the invite. */
@@ -49,13 +49,13 @@ export function App() {
 				it alone or invite a friend.
 			</p>
 			<form
-				className="flex w-full max-w-md flex-col gap-4 text-left"
+				className="flex w-full max-w-xl flex-col gap-4"
 				onSubmit={(event) => {
 					event.preventDefault()
 					start()
 				}}
 			>
-				<SettingInput
+				<IntentionInput
 					testId="intention-input"
 					autoFocus
 					label="What are you working on?"

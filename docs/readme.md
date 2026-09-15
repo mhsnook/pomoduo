@@ -23,7 +23,9 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
 - **One shared clock.** Start, pause, jump a minute either way, make a phase a
   minute longer or shorter, start over, and skip. Any member can press
   anything, and everyone sees it, with a line under the clock saying who did
-  it. Pausing or playing the video counts as pressing pause or start.
+  it. Pausing or playing the video counts as pressing pause or start. The
+  clock, its controls, and the intention stay at the top of the page as it
+  scrolls, so a glance finds all three.
 - **The break vote.** Under the members list, each member picks dance or yap
   for the break this pomo ends in. Not picking counts as dance. The losing
   kind banks its votes for next time, so a 50-50 duo takes turns and a lone

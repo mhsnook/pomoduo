@@ -167,6 +167,34 @@ body {
 	mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 
+/* The intention: big enough to read in a glance from across the desk, and lit
+   in the phase's own accent so the break repaints it along with everything else. */
+.pomo-intention {
+	width: 100%;
+	padding: 0.35em 0.6em;
+	border: 2px solid color-mix(in oklab, var(--pomo-accent) 50%, transparent);
+	border-radius: 0.6rem;
+	background: color-mix(in oklab, var(--pomo-accent) 8%, transparent);
+	color: inherit;
+	font-family: inherit;
+	font-size: clamp(1.4rem, 4.5vw, 2.75rem);
+	line-height: 1.2;
+	text-align: center;
+	transition:
+		border-color 200ms ease,
+		box-shadow 200ms ease;
+}
+
+.pomo-intention::placeholder {
+	color: color-mix(in oklab, currentcolor 40%, transparent);
+}
+
+.pomo-intention:focus {
+	outline: none;
+	border-color: var(--pomo-accent);
+	box-shadow: 0 0 0 4px color-mix(in oklab, var(--pomo-accent) 25%, transparent);
+}
+
 .pomo.is-break .pomo-clock {
 	animation: pomo-wobble 0.6s ease-in-out infinite alternate;
 	text-shadow:

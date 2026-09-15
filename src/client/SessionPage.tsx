@@ -28,6 +28,7 @@ import { PhaseVideo } from './components/PhaseVideo'
 import { EditPomoDialog, ReviewDialog } from './components/PomoDialogs'
 import {
 	clampMinutes,
+	IntentionInput,
 	Modal,
 	SettingInput,
 	Toggle,
@@ -644,7 +645,7 @@ function Session({
 
 					<div
 						data-testid="timer-controls"
-						className="pomo-controls flex flex-col items-center gap-4 pt-3 pb-8"
+						className="pomo-controls flex flex-col items-center gap-4 pt-3 pb-10"
 					>
 						<div className="flex items-center justify-center gap-4">
 							<Clock clock={clock} serverNow={connection.serverNow} isBreak={isBreak} />
@@ -728,17 +729,17 @@ function Session({
 						<p data-testid="last-change" className="font-ui min-h-5 text-xs opacity-60">
 							{lastChange ? describe(lastChange) : ''}
 						</p>
+						<div className="w-full max-w-xl">
+							<IntentionInput
+								testId="intention-input"
+								label={`Intention for this pomo${enterStarts ? (idle ? ' — enter to start' : ' — enter to resume') : ''}`}
+								value={intention}
+								onChange={updateIntention}
+								onEnter={enterStarts ? () => press({ type: 'start' }) : undefined}
+								placeholder="what are you going to do?"
+							/>
+						</div>
 					</div>
-
-					<SettingInput
-						testId="intention-input"
-						className="mx-auto w-full max-w-xl"
-						label={`Intention for this pomo${enterStarts ? (idle ? ' — enter to start' : ' — enter to resume') : ''}`}
-						value={intention}
-						onChange={updateIntention}
-						onEnter={enterStarts ? () => press({ type: 'start' }) : undefined}
-						placeholder="what are you going to do?"
-					/>
 
 					{showMusicBlocked && (
 						<div
@@ -782,7 +783,7 @@ function Session({
 					</section>
 				</div>
 
-				<aside className="flex flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
+				<aside className="flex min-w-0 flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
 					<Members members={members} you={connection.memberId} />
 					<VotePanel
 						clock={clock}

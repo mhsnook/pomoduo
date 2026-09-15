@@ -121,7 +121,14 @@ function describe(change: Pick<ClockRow, 'actor' | 'command' | 'deltaMs'>) {
 }
 
 /** Opens the connection to one session, and closes it when the page leaves. */
-export function SessionPage({ sessionId }: { sessionId: string }) {
+export function SessionPage({
+	sessionId,
+	startWith,
+}: {
+	sessionId: string
+	/** The intention this visit arrived with from the front page. It starts the clock. */
+	startWith?: string
+}) {
 	const [settings, setSettings] = useState<Settings>(loadSettings)
 	const [connection, setConnection] = useState<SessionConnection | null>(null)
 	// the connection asks for the name each time it sends, so it always sends the latest
@@ -148,6 +155,7 @@ export function SessionPage({ sessionId }: { sessionId: string }) {
 			connection={connection}
 			settings={settings}
 			updateSettings={updateSettings}
+			startWith={startWith}
 		/>
 	)
 }
@@ -156,10 +164,12 @@ function Session({
 	connection,
 	settings,
 	updateSettings,
+	startWith,
 }: {
 	connection: SessionConnection
 	settings: Settings
 	updateSettings: (patch: Partial<Settings>) => void
+	startWith?: string
 }) {
 	const { status, clock, lastChange, members } = useSyncExternalStore(
 		connection.subscribe,
@@ -175,8 +185,8 @@ function Session({
 	const [pomos, setPomos] = useState(readPomos)
 	const [day, setDay] = useState(() => resolveDay(loadDay(), pomos, Date.now()))
 	// the saved intention belongs to the saved day; a new day starts blank
-	const [intention, setIntention] = useState(() =>
-		day === loadDay() ? loadIntention() : '',
+	const [intention, setIntention] = useState(
+		() => startWith || (day === loadDay() ? loadIntention() : ''),
 	)
 	const current = pomos.find((p) => p.end === null) ?? null
 
@@ -241,6 +251,7 @@ function Session({
 	// unless the clock is still in the work phase it belongs to; bring the worked
 	// time up to date; and open a pomo if the clock is already running work.
 	const joined = useRef(false)
+	const [ledgerReady, setLedgerReady] = useState(false)
 	const onLive = useEffectEvent(() => {
 		const now = Date.now()
 		const inWork = clock.phase === 'work' && !isFresh(clock)
@@ -260,7 +271,18 @@ function Session({
 		if (status !== 'live' || joined.current) return
 		joined.current = true
 		onLive()
+		setLedgerReady(true)
 	}, [status])
+
+	// Arriving from the front page starts the pomo. It waits for the catch-up
+	// above to land: pressing start in the same commit would open the pomo
+	// against the ledger as it stood before, and miss it.
+	const toStart = useRef(startWith !== undefined)
+	useEffect(() => {
+		if (!ledgerReady || !toStart.current) return
+		toStart.current = false
+		if (connection.getState().clock.endsAt === null) connection.press({ type: 'start' })
+	}, [ledgerReady, connection])
 
 	// The ledger and the video react to the clock, whoever moved it.
 	const patchPomo = (id: string, patch: Partial<Pomo>) =>

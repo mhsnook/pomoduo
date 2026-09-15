@@ -10,10 +10,11 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
 
 ## What works today
 
-- **Sessions.** "Start a session" makes a session at `/s/<id>`. The address is
-  the invite: anyone with the link joins the same session. A session works
-  alone too. A session everyone has left ends after a full work phase plus a
-  break, and the next visit starts at the top of work.
+- **Sessions.** The front page asks what you are working on. Whatever you write
+  there becomes your intention, and the clock starts running in a session at
+  `/s/<id>`. The address is the invite: anyone with the link joins the same
+  session. A session works alone too. A session everyone has left ends after a
+  full work phase plus a break, and the next visit starts at the top of work.
 - **Who is here.** Every member shows at the top of the side column, above the
   ledger, with their name, their intention, and whether they are here or away.
   Hiding the ledger leaves the members in place.

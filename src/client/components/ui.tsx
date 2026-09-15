@@ -53,6 +53,7 @@ export function SettingInput({
 	type = 'text',
 	placeholder,
 	className,
+	autoFocus,
 }: {
 	testId: string
 	label: string
@@ -62,6 +63,7 @@ export function SettingInput({
 	type?: 'text' | 'number' | 'date' | 'datetime-local'
 	placeholder?: string
 	className?: string
+	autoFocus?: boolean
 }) {
 	return (
 		<label className={cn('font-ui flex flex-col gap-1 text-sm', className)}>
@@ -70,6 +72,7 @@ export function SettingInput({
 				id={testId}
 				data-testid={testId}
 				type={type}
+				autoFocus={autoFocus}
 				min={type === 'number' ? 1 : undefined}
 				value={value}
 				placeholder={placeholder}

@@ -24,12 +24,14 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   minute longer or shorter, start over, and skip. Any member can press
   anything, and everyone sees it, with a line under the clock saying who did
   it. Pausing or playing the video counts as pressing pause or start. The
-  clock, its controls, and the intention stay at the top of the page as it
-  scrolls, so a glance finds all three.
+  intention sits above the clock, and the three of them stay at the top of the
+  page as it scrolls, so a glance finds them all. A break puts the intention
+  away: the pomo it belonged to is filed in the ledger by then.
 - **The break vote.** Under the members list, each member picks dance or yap
-  for the break this pomo ends in. Not picking counts as dance. The losing
-  kind banks its votes for next time, so a 50-50 duo takes turns and a lone
-  holdout gets their way now and then. Picks clear when the break starts.
+  for the break this pomo ends in. Not picking counts as yap when someone else
+  is here, and as dance when you are alone. The losing kind banks its votes for
+  next time, so a 50-50 duo takes turns and a lone holdout gets their way now
+  and then. Picks clear when the break starts.
 - **Yap breaks** play no music and have no dance floor. Voice comes later.
 - **The phase lengths** belong to the session. Changing them in Settings
   changes them for everyone.

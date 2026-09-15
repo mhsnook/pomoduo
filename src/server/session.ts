@@ -17,7 +17,7 @@ import {
 	trackSchema,
 	voteSchema,
 } from '../shared/schema'
-import { type BreakKind, DEFAULT_KIND, freshTally } from '../shared/vote'
+import { type BreakKind, FIRST_KIND, freshTally, votesOf } from '../shared/vote'
 
 type SocketState = { memberId: string | null }
 
@@ -87,7 +87,7 @@ export class Session extends PartyDbServer<Env> {
 			durationMs REAL NOT NULL
 		)`)
 		// columns added after the tables first shipped
-		this.addColumn('clock', 'breakKind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`)
+		this.addColumn('clock', 'breakKind', `TEXT NOT NULL DEFAULT '${FIRST_KIND}'`)
 		this.addColumn(
 			'clock',
 			'tally',
@@ -342,12 +342,13 @@ export class Session extends PartyDbServer<Env> {
 		await this.writeMember(member, { ...base, vote })
 	}
 
-	/** One vote for each member who is here: their pick, or the default. */
+	/** One vote for each member who is here: their pick, or what silence counts as. */
 	private votes(): BreakKind[] {
-		return this.ctx.storage.sql
+		const picks = this.ctx.storage.sql
 			.exec('SELECT vote FROM members WHERE here = 1')
 			.toArray()
-			.map((r) => (r.vote === 'dance' || r.vote === 'yap' ? r.vote : DEFAULT_KIND))
+			.map((r) => (r.vote === 'dance' || r.vote === 'yap' ? r.vote : null))
+		return votesOf(picks)
 	}
 
 	/** A vote lasts one pomo: once the break starts, everyone's pick clears. */

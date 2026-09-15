@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { type BreakKind, decide, freshTally, type Tally } from './vote'
+import { type BreakKind, decide, freshTally, type Tally, votesOf } from './vote'
 
 /** The kinds that win when the same votes are cast at the end of every pomo. */
 function run(votes: BreakKind[], pomos: number) {
@@ -56,5 +56,24 @@ describe('the break vote', () => {
 
 	it('goes to dance when nobody has voted and nothing is banked', () => {
 		expect(decide([], freshTally()).kind).toBe('dance')
+	})
+})
+
+describe('what silence counts as', () => {
+	it('is a dance on your own', () => {
+		expect(votesOf([null])).toEqual(['dance'])
+	})
+
+	it('is a yap once there is someone to yap with', () => {
+		expect(votesOf([null, null])).toEqual(['yap', 'yap'])
+		expect(decide(votesOf([null, null]), freshTally()).kind).toBe('yap')
+	})
+
+	it('leaves the picks people did make alone', () => {
+		expect(votesOf(['dance', null, 'yap'])).toEqual(['dance', 'yap', 'yap'])
+	})
+
+	it('still gives the first tie to dance, so one pick beats one silence', () => {
+		expect(decide(votesOf(['dance', null]), freshTally()).kind).toBe('dance')
 	})
 })

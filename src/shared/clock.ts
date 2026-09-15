@@ -6,7 +6,7 @@
  * reach the same clock. The rules live in tree/rules.md under "The clock".
  */
 
-import { type BreakKind, decide, DEFAULT_KIND, freshTally, type Tally } from './vote'
+import { type BreakKind, decide, FIRST_KIND, freshTally, type Tally } from './vote'
 
 export type Phase = 'work' | 'break'
 
@@ -65,7 +65,7 @@ export const freshClock = (durations: Durations = DEFAULT_DURATIONS): Clock => (
 	remainingMs: durations.work,
 	durations,
 	playlist: { work: 0, break: 0 },
-	breakKind: DEFAULT_KIND,
+	breakKind: FIRST_KIND,
 	tally: freshTally(),
 })
 

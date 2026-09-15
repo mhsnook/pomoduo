@@ -7,8 +7,18 @@ export type BreakKind = 'dance' | 'yap'
 
 export const BREAK_KINDS: BreakKind[] = ['dance', 'yap']
 
-/** What a member who has not picked counts as. */
-export const DEFAULT_KIND: BreakKind = 'dance'
+/** The kind a session starts on, and the winner of a tie nobody has lost yet. */
+export const FIRST_KIND: BreakKind = 'dance'
+
+/**
+ * What a member who has not picked counts as. Alone there is nobody to yap
+ * with, so silence is a dance; from two people up, silence is talking.
+ */
+export const defaultKind = (here: number): BreakKind => (here > 1 ? 'yap' : 'dance')
+
+/** One vote for each member who is here: their pick, or what silence counts as. */
+export const votesOf = (picks: (BreakKind | null)[]): BreakKind[] =>
+	picks.map((pick) => pick ?? defaultKind(picks.length))
 
 export const otherKind = (kind: BreakKind): BreakKind =>
 	kind === 'dance' ? 'yap' : 'dance'
@@ -35,7 +45,7 @@ export function standing(votes: BreakKind[], tally: Tally) {
 			? 'dance'
 			: total.yap > total.dance
 				? 'yap'
-				: (tally.lastLoser ?? DEFAULT_KIND)
+				: (tally.lastLoser ?? FIRST_KIND)
 	return { cast, total, leader }
 }
 

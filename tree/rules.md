@@ -122,10 +122,12 @@ yap. Until voice exists, a yap break is a break with no music.
 
 Em replaced the decay-factor weights with a bank on 2026-09-15. It needs
 almost no weighting and still hears everyone, eventually. It does not have to
-be the fairest vote possible.
+be the fairest vote possible. Silence counted as dance until later that day,
+when it became yap in company: two people who say nothing about the break are
+there for each other, and a person alone has nobody to talk to.
 
-- Each member who is here counts one vote: their pick, or dance if they did
-  not pick.
+- Each member who is here counts one vote: their pick, or, if they did not
+  pick, yap when somebody else is here and dance when they are alone.
 - Each kind has a bank. A kind's total is its votes plus its bank. The higher
   total wins. On a tie, the kind that lost last time wins, and dance wins the
   very first tie.

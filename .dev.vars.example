@@ -1,0 +1,12 @@
+# The Cloudflare Realtime app that carries a session's call. Copy this file to
+# .dev.vars and fill it in for local development; a deployment gets the same
+# four through `wrangler secret put`.
+#
+# An SFU app: https://dash.cloudflare.com/?to=/:account/realtime/sfu/create
+SFU_APP_ID=""
+SFU_APP_TOKEN=""
+# A TURN app, optional: https://dash.cloudflare.com/?to=/:account/realtime/turn/create
+# Without it the call falls back to Cloudflare's STUN servers, which is enough
+# unless someone's network refuses to carry the audio directly.
+TURN_SERVER_APP_ID=""
+TURN_SERVER_APP_TOKEN=""

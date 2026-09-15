@@ -231,3 +231,51 @@ describe('the break vote at the end of work', () => {
 		expect(ended.tally).toEqual({ bank: { dance: 0, yap: 0 }, lastLoser: null })
 	})
 })
+
+describe('the call', () => {
+	it('is open on a fresh session, and starting work closes it', () => {
+		expect(freshClock(durations).callOpen).toBe(true)
+		expect(running().callOpen).toBe(false)
+	})
+
+	it('opens when a yap break starts, however work ended', () => {
+		expect(apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!.callOpen).toBe(true)
+		expect(apply(running(), { type: 'rollover' }, T + 60_000, ['yap'])!.callOpen).toBe(
+			true,
+		)
+		expect(
+			apply(running(), { type: 'nudge', deltaMs: 10_000 }, T + 56_000, ['yap'])!.callOpen,
+		).toBe(true)
+	})
+
+	it('stays closed for a dance break', () => {
+		expect(apply(running(), { type: 'skip' }, T + 10_000, ['dance'])!.callOpen).toBe(
+			false,
+		)
+	})
+
+	it('cuts when the yap break ends', () => {
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		expect(apply(inYap, { type: 'rollover' }, inYap.endsAt!, [])!.callOpen).toBe(false)
+		expect(apply(inYap, { type: 'skip' }, T + 15_000, [])!.callOpen).toBe(false)
+	})
+
+	it('stays open while a yap break pauses and starts again', () => {
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const paused = apply(inYap, { type: 'pause' }, T + 12_000)!
+		expect(paused.callOpen).toBe(true)
+		expect(apply(paused, { type: 'start' }, T + 14_000)!.callOpen).toBe(true)
+	})
+
+	it('opens again on a jump back into a yap break, and closes on the way out', () => {
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const inWork = apply(inYap, { type: 'skip' }, T + 12_000, [])!
+		expect(inWork.callOpen).toBe(false)
+		const back = apply(inWork, { type: 'nudge', deltaMs: -60_000 }, T + 14_000, [])!
+		expect(back.callOpen).toBe(true)
+	})
+
+	it('is open again when an empty session ends and starts over', () => {
+		expect(apply(running(), { type: 'end' }, T + 20_000)!.callOpen).toBe(true)
+	})
+})

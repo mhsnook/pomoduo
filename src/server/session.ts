@@ -15,6 +15,8 @@ import {
 	memberUpdateSchema,
 	type Track,
 	trackSchema,
+	type Voice,
+	voiceSchema,
 	voteSchema,
 } from '../shared/schema'
 import { type BreakKind, DEFAULT_KIND, freshTally } from '../shared/vote'
@@ -23,6 +25,29 @@ type SocketState = { memberId: string | null }
 
 /** Storage key: when the last device left, while nobody has come back. */
 const EMPTY_SINCE = 'emptySince'
+
+/** A member row out of SQLite, where booleans are integers and the mic is JSON. */
+const parseMember = (raw: Record<string, unknown>): Member =>
+	memberSchema.parse({
+		...raw,
+		here: Boolean(raw.here),
+		onCall: Boolean(raw.onCall),
+		muted: Boolean(raw.muted),
+		mic: raw.mic ? JSON.parse(String(raw.mic)) : null,
+	})
+
+/** A member the room has heard of but has no details for yet. */
+const blankMember = (id: string, here: boolean): Member => ({
+	id,
+	name: '',
+	intention: '',
+	here,
+	seenAt: Date.now(),
+	vote: null,
+	onCall: false,
+	muted: false,
+	mic: null,
+})
 
 const memberIdOf = (request: Request) => {
 	const cookie = request.headers.get('cookie') ?? ''
@@ -41,13 +66,14 @@ const memberIdOf = (request: Request) => {
  *   order and commits the resulting row, which party-db fans out to everyone.
  * - `POST .../member` sets a member's name and intention.
  * - `POST .../vote` sets a member's pick for the break vote.
+ * - `POST .../voice` sets a member's place on the call and where their mic is.
  * - `POST .../track` records a video's length, the first time anyone learns it.
  * - `GET .../time` answers with server time, for a device's first sync.
  *
  * The room keeps members' presence itself, from their sockets. It flips the
  * phase itself when the end time passes, takes the break vote when work ends,
- * and ends the session when the last device has been gone for a full work
- * phase plus a break.
+ * takes everyone off the call when the call closes, and ends the session when
+ * the last device has been gone for a full work phase plus a break.
  */
 export class Session extends PartyDbServer<Env> {
 	collections = [
@@ -94,6 +120,10 @@ export class Session extends PartyDbServer<Env> {
 			`TEXT NOT NULL DEFAULT '${JSON.stringify(freshTally())}'`,
 		)
 		this.addColumn('members', 'vote', 'TEXT')
+		this.addColumn('clock', 'callOpen', 'INTEGER NOT NULL DEFAULT 1')
+		this.addColumn('members', 'onCall', 'INTEGER NOT NULL DEFAULT 0')
+		this.addColumn('members', 'muted', 'INTEGER NOT NULL DEFAULT 0')
+		this.addColumn('members', 'mic', 'TEXT')
 		return super.onStart()
 	}
 
@@ -158,6 +188,13 @@ export class Session extends PartyDbServer<Env> {
 			await this.serially(() => this.vote(parsed.data))
 			return new Response(null, { status: 204 })
 		}
+		if (req.method === 'POST' && action === 'voice') {
+			const parsed = voiceSchema.safeParse(await req.json().catch(() => null))
+			if (!parsed.success)
+				return Response.json({ error: parsed.error.message }, { status: 400 })
+			await this.serially(() => this.setVoice(parsed.data))
+			return new Response(null, { status: 204 })
+		}
 		if (req.method === 'POST' && action === 'track') {
 			const parsed = trackSchema.safeParse(await req.json().catch(() => null))
 			if (!parsed.success)
@@ -197,6 +234,7 @@ export class Session extends PartyDbServer<Env> {
 			stampedAt: serverAt,
 		})
 		if (startsBreak(before, next, command)) await this.clearVotes()
+		if (before.callOpen && !next.callOpen) await this.hangUpAll()
 		await this.schedule()
 		return { serverAt, row }
 	}
@@ -215,6 +253,7 @@ export class Session extends PartyDbServer<Env> {
 			stampedAt: now,
 		})
 		if (startsBreak(current.clock, next, command)) await this.clearVotes()
+		if (current.clock.callOpen && !next.callOpen) await this.hangUpAll()
 	}
 
 	/** Everyone left and stayed away for a full work phase plus a break: the session is over. */
@@ -257,11 +296,22 @@ export class Session extends PartyDbServer<Env> {
 			durations: JSON.parse(String(raw.durations)),
 			playlist: JSON.parse(String(raw.playlist)),
 			tally: JSON.parse(String(raw.tally)),
+			callOpen: Boolean(raw.callOpen),
 		})
-		const { phase, endsAt, remainingMs, durations, playlist, breakKind, tally } = row
+		const { phase, endsAt, remainingMs, durations, playlist } = row
+		const { breakKind, tally, callOpen } = row
 		return {
 			row,
-			clock: { phase, endsAt, remainingMs, durations, playlist, breakKind, tally },
+			clock: {
+				phase,
+				endsAt,
+				remainingMs,
+				durations,
+				playlist,
+				breakKind,
+				tally,
+				callOpen,
+			},
 		}
 	}
 
@@ -302,7 +352,7 @@ export class Session extends PartyDbServer<Env> {
 		const [raw] = this.ctx.storage.sql
 			.exec('SELECT * FROM members WHERE id = ?', id)
 			.toArray()
-		return raw ? memberSchema.parse({ ...raw, here: Boolean(raw.here) }) : null
+		return raw ? parseMember(raw) : null
 	}
 
 	private async writeMember(previous: Member | null, member: Member) {
@@ -320,7 +370,15 @@ export class Session extends PartyDbServer<Env> {
 		if (!member) return // their first details will arrive through POST .../member
 		const here = this.openSockets(closingId).some((c) => c.state?.memberId === memberId)
 		if (here === member.here) return
-		await this.writeMember(member, { ...member, here, seenAt: Date.now() })
+		const seenAt = Date.now()
+		// A member who has gone comes off the call with them: their mic has stopped,
+		// and anyone still pulling it would sit on a track that never speaks again.
+		await this.writeMember(
+			member,
+			here
+				? { ...member, here, seenAt }
+				: { ...member, here, seenAt, onCall: false, mic: null },
+		)
 	}
 
 	private async updateMember(update: { id: string; name: string; intention: string }) {
@@ -328,8 +386,8 @@ export class Session extends PartyDbServer<Env> {
 		const here = this.openSockets().some((c) => c.state?.memberId === update.id)
 		if (member && member.name === update.name && member.intention === update.intention)
 			return
-		const vote = member?.vote ?? null
-		await this.writeMember(member, { ...update, here, vote, seenAt: Date.now() })
+		const base = member ?? blankMember(update.id, here)
+		await this.writeMember(member, { ...base, ...update, here, seenAt: Date.now() })
 	}
 
 	// ---- the break vote ----
@@ -338,7 +396,7 @@ export class Session extends PartyDbServer<Env> {
 		const member = this.readMember(id)
 		if (member?.vote === vote) return
 		const here = this.openSockets().some((c) => c.state?.memberId === id)
-		const base = member ?? { id, name: '', intention: '', here, seenAt: Date.now() }
+		const base = member ?? blankMember(id, here)
 		await this.writeMember(member, { ...base, vote })
 	}
 
@@ -355,7 +413,7 @@ export class Session extends PartyDbServer<Env> {
 		const voted = this.ctx.storage.sql
 			.exec('SELECT * FROM members WHERE vote IS NOT NULL')
 			.toArray()
-			.map((raw) => memberSchema.parse({ ...raw, here: Boolean(raw.here) }))
+			.map(parseMember)
 		if (voted.length === 0) return
 		await this.commit([
 			{
@@ -363,6 +421,44 @@ export class Session extends PartyDbServer<Env> {
 				ops: voted.map((member) => ({
 					type: 'update',
 					value: { ...member, vote: null },
+				})),
+			},
+		])
+	}
+
+	// ---- the call ----
+
+	/** How one member sits on the call, and where the others can pull their mic. */
+	private async setVoice({ id, onCall, muted, mic }: Voice) {
+		const member = this.readMember(id)
+		if (
+			member &&
+			member.onCall === onCall &&
+			member.muted === muted &&
+			JSON.stringify(member.mic) === JSON.stringify(mic)
+		)
+			return
+		const here = this.openSockets().some((c) => c.state?.memberId === id)
+		const base = member ?? blankMember(id, here)
+		await this.writeMember(member, { ...base, onCall, muted, mic, seenAt: Date.now() })
+	}
+
+	/**
+	 * The call closed, so everyone comes off it. Each device also stops on its own
+	 * when its clock reaches the same place; this catches the ones that did not.
+	 */
+	private async hangUpAll() {
+		const onCall = this.ctx.storage.sql
+			.exec('SELECT * FROM members WHERE onCall = 1')
+			.toArray()
+			.map(parseMember)
+		if (onCall.length === 0) return
+		await this.commit([
+			{
+				channel: 'members',
+				ops: onCall.map((member) => ({
+					type: 'update',
+					value: { ...member, onCall: false, mic: null },
 				})),
 			},
 		])

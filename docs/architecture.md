@@ -9,6 +9,9 @@ How pomoduo works today. For why, and for what is not decided yet, see
 A single Cloudflare Worker, `src/server/index.ts`, serves everything:
 
 - `/parties/session/<id>/...` goes to that session's Durable Object.
+- `/partytracks/*` is the call, passed on to the Cloudflare Realtime SFU. It
+  goes through the Worker because only the Worker holds the Realtime app's
+  token. A deployment without one answers 503 here, and nothing else changes.
 - Every other path is the single-page app, built by Vite into `dist/client`
   and served as static assets. A path that is not a file gets `index.html`.
 
@@ -17,22 +20,23 @@ A single Cloudflare Worker, `src/server/index.ts`, serves everything:
 `src/server/session.ts` is one Durable Object per session, built on party-db's
 `PartyDbServer`. It keeps three tables in its own SQLite:
 
-| Table     | Rows                                                  | Written by                                         |
-| --------- | ----------------------------------------------------- | -------------------------------------------------- |
-| `clock`   | One: the shared clock, and the last change made to it | Commands, and the room's alarm                     |
-| `members` | One per member: name, intention, here or not          | The member's device, and the room from its sockets |
-| `tracks`  | One per video: its length                             | The first member whose player loads it             |
+| Table     | Rows                                                                      | Written by                                         |
+| --------- | ------------------------------------------------------------------------- | -------------------------------------------------- |
+| `clock`   | One: the shared clock, and the last change made to it                     | Commands, and the room's alarm                     |
+| `members` | One per member: name, intention, here or not, and their place on the call | The member's device, and the room from its sockets |
+| `tracks`  | One per video: its length                                                 | The first member whose player loads it             |
 
 Members read all three through party-db's socket. They never write through
 party-db: the room refuses party-db's write path, and changes only through
 its own endpoints.
 
-| Endpoint           | What it does                                           |
-| ------------------ | ------------------------------------------------------ |
-| `GET .../time`     | Answers with server time, for a device's first sync    |
-| `POST .../command` | Applies one clock command and answers with the new row |
-| `POST .../member`  | Sets a member's name and intention                     |
-| `POST .../track`   | Records a video's length, if nobody has yet            |
+| Endpoint           | What it does                                              |
+| ------------------ | --------------------------------------------------------- |
+| `GET .../time`     | Answers with server time, for a device's first sync       |
+| `POST .../command` | Applies one clock command and answers with the new row    |
+| `POST .../member`  | Sets a member's name and intention                        |
+| `POST .../voice`   | Sets a member's place on the call, and where their mic is |
+| `POST .../track`   | Records a video's length, if nobody has yet               |
 
 **Presence.** A device's member id rides on its socket as the `pomoduo-member`
 cookie. The room marks a member here when one of their sockets opens, and
@@ -64,6 +68,34 @@ room counts the members it has marked here; a device predicting the same
 change counts the members it has. The room clears every pick after the vote.
 A yap break plays no music, so its playlist does not move on.
 
+## The call
+
+A session has one call, open or closed for everyone at once. `callOpen` is a
+column of the clock row, so it changes only through `apply`, like every other
+part of the clock:
+
+- A session starts with the call open, and starting work closes it.
+- Entering a break opens the call if the break is a yap one and closes it
+  otherwise, however the phase changed: a skip, a rollover, or a jump either
+  way.
+
+Whether a member is on the call is their own, and `members` carries it in three
+columns: `onCall` once they have picked up, `muted`, and `mic`, the SFU session
+and track name the others pull their voice from. A device that has picked the
+call up before joins a break's call by itself; before that it waits for a
+click, because the first mic prompt needs one.
+
+`src/client/session/call.tsx` is one device's end of the call, mounted only
+while that member is on it, so hanging up takes the peer connection and the mic
+with it. partytracks pushes the mic to the SFU and pulls every other member's,
+each into an audio element of its own. Muting swaps a silent track in rather
+than stopping the stream, because the SFU collects a track that has sent
+nothing for thirty seconds.
+
+When the call closes, each device comes off it as its own clock reaches the
+same place, and the room clears `onCall` and `mic` for anyone who did not. A
+member who leaves the session comes off the call with them.
+
 ## A device
 
 `src/client/session/connection.ts` is one device's connection to a session.
@@ -93,4 +125,5 @@ A yap break plays no music, so its playlist does not move on.
 
 `localStorage`, under `pomoduo:`: the ledger of pomos with the time each one
 ran, the current intention and work day, settings (playlists, name, ledger and
-motion toggles), and this device's member id.
+motion toggles), this device's member id, and whether it has ever picked the
+call up.

@@ -24,6 +24,7 @@ import {
 import { type BreakKind, DEFAULT_KIND } from '../../shared/vote'
 import { memberId } from '../lib/member'
 import { firstSync, resync, type ServerTime, serverNowOf } from '../lib/server-time'
+import type { VoiceState } from './call'
 
 /** Something the page should react to, beyond re-rendering. */
 export type SessionEvent =
@@ -52,6 +53,7 @@ const clockOf = (row: ClockRow): Clock => ({
 	playlist: row.playlist,
 	breakKind: row.breakKind,
 	tally: row.tally,
+	callOpen: row.callOpen,
 })
 
 const commandOf = (row: ClockRow) =>
@@ -261,6 +263,15 @@ export class SessionConnection {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ id: this.memberId, vote: kind }),
+		}).catch((error) => console.error(error))
+	}
+
+	/** Say how this device sits on the call, and where the others can pull its mic. */
+	voice = (state: VoiceState) => {
+		void fetch(`${this.base}/voice`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ id: this.memberId, ...state }),
 		}).catch((error) => console.error(error))
 	}
 

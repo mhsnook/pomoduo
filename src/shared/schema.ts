@@ -54,6 +54,8 @@ export const clockRowSchema = z.object({
 	deltaMs: z.number(),
 	/** The id of the command that made the last change; null for a rollover. */
 	commandId: z.string().nullable(),
+	/** Whether the session's call is open. */
+	callOpen: z.boolean(),
 })
 export type ClockRow = z.infer<typeof clockRowSchema>
 
@@ -66,6 +68,17 @@ export const trackSchema = z.object({
 })
 export type Track = z.infer<typeof trackSchema>
 
+/**
+ * Where the SFU carries one member's mic. The session id here is the SFU's own,
+ * nothing to do with the pomoduo session: it changes whenever that device's peer
+ * connection is remade, and the others have to pull the mic again when it does.
+ */
+export const micSchema = z.object({
+	sessionId: z.string().max(200),
+	trackName: z.string().max(200),
+})
+export type Mic = z.infer<typeof micSchema>
+
 /** A member of the session: who they are, what they are working on, and whether they are here. */
 export const memberSchema = z.object({
 	id: z.string(),
@@ -77,6 +90,12 @@ export const memberSchema = z.object({
 	seenAt: z.number(),
 	/** The kind of break this member picked for the end of this pomo; null counts as dance. */
 	vote: breakKind.nullable(),
+	/** Whether this member has picked the call up. */
+	onCall: z.boolean(),
+	/** Whether this member's mic is off while they are on the call. */
+	muted: z.boolean(),
+	/** Where the others pull this member's mic from, while they are on the call. */
+	mic: micSchema.nullable(),
 })
 export type Member = z.infer<typeof memberSchema>
 
@@ -92,6 +111,18 @@ export const voteSchema = z.object({
 	id: z.string().min(1).max(64),
 	vote: breakKind.nullable(),
 })
+
+/** What a device sends to say how it sits on the call, and where its mic is. */
+export const voiceSchema = z.object({
+	id: z.string().min(1).max(64),
+	onCall: z.boolean(),
+	muted: z.boolean(),
+	mic: micSchema.nullable(),
+})
+export type Voice = z.infer<typeof voiceSchema>
+
+/** Where the Worker proxies the call's requests through to the Realtime SFU. */
+export const VOICE_PREFIX = '/partytracks'
 
 /** The cookie that carries a device's member id on the socket upgrade. */
 export const MEMBER_COOKIE = 'pomoduo-member'

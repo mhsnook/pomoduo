@@ -1,3 +1,5 @@
+import { Mic, MicOff } from 'lucide-react'
+
 import type { Member } from '../../shared/schema'
 import { cn } from '../lib/format'
 
@@ -34,11 +36,23 @@ export function Members({ members, you }: { members: Member[]; you: string }) {
 							/>
 							<span className="font-bold">{member.name || 'someone'}</span>
 							{member.id === you && <span className="opacity-60">you</span>}
-							{member.vote && (
-								<span title={`picked ${member.vote} for this break`} className="ml-auto">
-									{member.vote === 'dance' ? '💃' : '💬'}
-								</span>
-							)}
+							<span className="ml-auto flex items-center gap-1.5">
+								{member.vote && (
+									<span title={`picked ${member.vote} for this break`}>
+										{member.vote === 'dance' ? '💃' : '💬'}
+									</span>
+								)}
+								{member.onCall &&
+									member.mic &&
+									(member.muted ? (
+										<MicOff
+											className="size-4 opacity-60"
+											aria-label="on the call, muted"
+										/>
+									) : (
+										<Mic className="size-4" aria-label="on the call" />
+									))}
+							</span>
 							{!member.here && <span className="opacity-60">away</span>}
 						</span>
 						<span className="truncate opacity-80" title={member.intention}>

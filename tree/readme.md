@@ -96,7 +96,8 @@ the product; the pair is.
   a knock; closes when work starts; cuts on "3, 2, 1, beep" at the end of a
   break.
 - [Voice transport](architecture.md#voice-transport): Cloudflare Realtime
-  SFU from the session DO, partytracks on the client, mesh as fallback.
+  SFU proxied by the Worker, partytracks on the client, the session room for
+  the signalling, mesh as fallback.
 - [User-owned tables](architecture.md#user-owned-tables-in-party-db): one
   general room, an owner column, party-db filters per socket. Cookbook 05,
   built.
@@ -111,8 +112,8 @@ prose is made; what is left closes by building. See
    the first build of the real app
 2. [User-owned tables, built](prototypes.md#open-user-owned-tables-built),
    in the party-db repo, and independent of 1
-3. [A yap break end to end](prototypes.md#open-a-yap-break-end-to-end).
-   Blocked by 1.
+3. [A yap break end to end](prototypes.md#open-a-yap-break-end-to-end). The
+   voice half is built and waits on a Cloudflare Realtime app; chat is not.
 
 ## Not yet specified
 

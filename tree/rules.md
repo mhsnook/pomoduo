@@ -169,6 +169,13 @@ When the call opens:
   live, unless they mute or hang up.
 - A knock opens the call mid-work for the members who accepted.
 
+Picking up is each member's own, and on the web the first one has to be a
+click: no browser hands a page the mic without one. So a device that has picked
+the call up before answers a break's call by itself, with its mic live, and one
+that never has waits for a click. The call a session starts with is an
+invitation rather than a call anyone is on, so nobody answers it by themselves;
+otherwise opening a fresh link would turn a stranger's mic on.
+
 When the call closes:
 
 - Starting work closes the call for everyone.

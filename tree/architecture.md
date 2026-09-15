@@ -88,4 +88,12 @@ Ringing someone who is not on the page is a browser problem shared by every
 option (Web Push from the DO, iOS only for Home Screen web apps), so it did
 not pick the transport. It stays in the fog.
 
+Built on 2026-09-15, and one thing came out differently. The DO holds the
+signalling, as this said: who is on the call and where each member's mic is are
+rows in the session room, like everything else shared. But the HTTPS API is not
+called from the DO. partytracks' own server half is a proxy that adds the app
+token to whatever the client asks for, and the Worker in front of the DO is
+where that belongs, on `/partytracks/*`. Nothing about a call is per session on
+that path, so routing it through a session's DO would have bought nothing.
+
 Research: [architecture/voice-options.md](architecture/voice-options.md).

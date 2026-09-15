@@ -138,8 +138,8 @@ Tests: [User-owned tables in party-db](architecture.md#user-owned-tables-in-part
 Question: what is the smallest change to party-db that makes this true, and
 what does it cost the transparent and RDBMS modes that exist today?
 
-Built on 2026-09-15 on party-db's `user-owned-tables` branch, not merged or
-published. A collection declares `ownerColumn`, the uid is `claims.sub` from
+Built on 2026-09-15 on party-db's `user-owned-tables` branch, open as a pull
+request there and not merged or published yet. A collection declares `ownerColumn`, the uid is `claims.sub` from
 the existing `auth` hook, writes are stamped and checked, and the snapshot,
 backlog, and fan-out carry only a socket's own rows. A room with no access
 declarations behaves exactly as before. 239 unit and 57 integration tests
@@ -166,4 +166,30 @@ Tests: [Voice](rules.md#voice), [Chat](rules.md#chat),
 Question: does the moment at the end of a break land, and does the SFU mute
 trick hold up on a phone?
 
-Blocked by: [A shared clock over the real transport](#open-a-shared-clock-over-the-real-transport).
+The voice half was built on 2026-09-15, up to the point where it needs a real
+Cloudflare Realtime app, which is Em's to make. Chat is not built. What the
+build settled:
+
+- Whether the call is open is a column of the clock row, so it changes only
+  through `apply`, like the break kind. Every rule about when the call opens
+  and closes then falls out of the phase changes that already exist, on the
+  room and on every device at once, and the cut lands exactly when the phase
+  flips rather than a round trip later.
+- "Every present member is on it with their mic live" cannot be the whole
+  truth on the web, because the first mic prompt needs a click. A device that
+  has picked the call up once answers a break by itself; a device that never
+  has waits for a click. See [Voice](rules.md#voice).
+- The call a session starts with is an invitation, not an answered call: a
+  device that has picked up before does not answer it by itself, because
+  opening a fresh link would then turn a stranger's mic on.
+- A call that cannot reach the SFU looks exactly like one that can, because
+  partytracks retries quietly and its `sessionError$` never fires. The page
+  watches the peer connection instead, and says so when the mic has not got
+  through.
+
+Checked in local dev with two headless Chrome profiles: a yap break opened the
+call on both, each saw the other pick up, and work closed it and cleared both
+mics. Without a Realtime app the SFU cannot be reached, so real audio between
+two people is still untried, and so are the phone questions above.
+
+Blocked by: a Cloudflare Realtime app on Em's account. See the README.

@@ -34,7 +34,7 @@ type SocketState = { memberId: string | null }
 /** Storage key: when the last device left, while nobody has come back. */
 const EMPTY_SINCE = 'emptySince'
 
-/** A member row out of SQLite, where booleans are integers and the mic is JSON. */
+/** Parses a member row out of SQLite, where booleans are integers and the mic is JSON. */
 const parseMember = (raw: Record<string, unknown>): Member =>
 	memberSchema.parse({
 		...raw,
@@ -44,7 +44,7 @@ const parseMember = (raw: Record<string, unknown>): Member =>
 		mic: raw.mic ? JSON.parse(String(raw.mic)) : null,
 	})
 
-/** A member the room has heard of but has no details for yet. */
+/** Builds a member the room has heard of but holds no details for yet. */
 const blankMember = (id: string, here: boolean): Member => ({
 	id,
 	name: '',
@@ -200,7 +200,7 @@ export class Session extends PartyDbServer<Env> {
 		return new Response('Not found', { status: 404 })
 	}
 
-	/** One write from a member: read it, check it, and queue it behind the rest. */
+	/** Reads one write from a member, checks it, and queues it behind the others. */
 	private async accept<T>(
 		req: Request,
 		schema: ZodType<T>,
@@ -307,10 +307,10 @@ export class Session extends PartyDbServer<Env> {
 	}
 
 	/**
-	 * One change to the clock, and everything that follows from it. Every command
-	 * comes through here, so a consequence is written once rather than once per
-	 * branch: the row, the vote clearing when a break starts, and the call
-	 * emptying when it closes.
+	 * Writes one clock change and does what that change calls for: it clears the
+	 * votes when a break starts, and takes everyone off the call when the call
+	 * closes. Every command that changes the clock calls this, so a new
+	 * consequence goes here rather than into each command.
 	 */
 	private async settle(
 		before: Clock,
@@ -369,7 +369,7 @@ export class Session extends PartyDbServer<Env> {
 		return this.openSockets(closingId).some((c) => c.state?.memberId === memberId)
 	}
 
-	/** The same change to every member a query finds, in one commit. */
+	/** Makes the same change to every member the query finds, in one commit. */
 	private async patchMembers(where: string, patch: Partial<Member>) {
 		const found = this.ctx.storage.sql
 			.exec(`SELECT * FROM members WHERE ${where}`)
@@ -447,7 +447,7 @@ export class Session extends PartyDbServer<Env> {
 
 	// ---- the call ----
 
-	/** How one member sits on the call, and where the others can pull their mic. */
+	/** Records how one member sits on the call, and where the others pull their mic from. */
 	private async setVoice({ id, onCall, muted, mic }: Voice) {
 		const member = this.readMember(id)
 		if (

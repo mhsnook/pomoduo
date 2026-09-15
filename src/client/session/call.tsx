@@ -14,9 +14,8 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import type { Clock } from '../../shared/clock'
 import { type Member, type Mic, VOICE_PREFIX } from '../../shared/schema'
 import { secondsOf } from '../lib/server-time'
-import { hasPickedUp, rememberPickedUp } from '../lib/voice'
 
-/** What this device tells the room about where it sits on the call. */
+/** Describes what this device tells the room about where it sits on the call. */
 export type VoiceState = { onCall: boolean; muted: boolean; mic: Mic | null }
 
 /** How long before the end of a break the count to the cut begins. */
@@ -28,7 +27,7 @@ const SLOW_MS = 10_000
 const NO_MIC =
 	'Your mic has not reached the other side. The call may not be set up on this server.'
 
-/** This device's whole side of the call, for a panel to draw. */
+/** Describes this device's whole side of the call, for a panel to draw. */
 export type CallState = {
 	/** Whether the session's call is open, which is the clock's business, not this device's. */
 	open: boolean
@@ -49,8 +48,20 @@ export type CallState = {
 }
 
 /**
- * This device on the session's call. The clock says whether the call is open;
- * this says whether you are on it, and holds the connection while you are.
+/**
+ * Holds this device's side of the session's call, and keeps the connection open
+ * while this member is on it. Three things decide whether your mic is live, and
+ * they do not move each other:
+ *
+ * - The browser has given the page the mic, or it has not. That is the
+ *   browser's to remember, and the call never changes it.
+ * - You are muted, or you are not. That is yours, and it carries from one call
+ *   to the next until you change it.
+ * - The call is open, or it is closed. That is the clock's, and it turns on
+ *   every mic that is already allowed and not muted.
+ *
+ * Hanging up is the fourth, and the only one that belongs to a single call: it
+ * takes you off this one, and the next one starts without it.
  */
 export function useCall({
 	clock,
@@ -66,30 +77,32 @@ export function useCall({
 	onVoice: (state: VoiceState) => void
 }): CallState {
 	const { callOpen } = clock
-	/**
-	 * Whether this device answers without being asked. A break is a moment the
-	 * session chose, so a device that has picked up before joins it with its mic
-	 * live. The call a session opens before anyone has started work is not that
-	 * moment, and grabbing the mic of whoever opens a fresh link would be rude.
-	 */
-	const answersItself = () => callOpen && clock.phase === 'break' && hasPickedUp()
-
-	const [onCall, setOnCall] = useState(answersItself)
+	const allowed = useMicAllowed()
 	const [muted, setMuted] = useState(false)
+	const [answered, setAnswered] = useState(false)
+	const [hungUp, setHungUp] = useState(false)
 	const [notice, setNotice] = useState('')
 	const [live, setLive] = useState(false)
 	const [slow, setSlow] = useState(false)
 	const [wasOpen, setWasOpen] = useState(callOpen)
 
-	// The call opening is a fresh start: nothing from the last one carries over.
+	// A call opening or closing clears what belonged to the last one. Your mute
+	// is not one of those things, and neither is the browser's answer about the
+	// mic: both carry across, so neither is touched here.
 	if (wasOpen !== callOpen) {
 		setWasOpen(callOpen)
-		setMuted(false)
+		setAnswered(false)
+		setHungUp(false)
 		setNotice('')
 		setLive(false)
 		setSlow(false)
-		setOnCall(answersItself())
 	}
+
+	// A break's call opens every mic the browser has already allowed. The call a
+	// session opens before work starts is an invitation and waits for a click, so
+	// nobody's mic goes live while they are working.
+	const joinsOnItsOwn = allowed && clock.phase === 'break'
+	const onCall = callOpen && !hungUp && (answered || joinsOnItsOwn)
 
 	const waiting = onCall && !live
 	useEffect(() => {
@@ -108,13 +121,13 @@ export function useCall({
 		notice: notice || (waiting && slow ? NO_MIC : ''),
 		countdown: seconds !== null && seconds > 0 && seconds <= COUNT_FROM ? seconds : null,
 		pickUp: () => {
-			rememberPickedUp()
 			setNotice('')
 			setSlow(false)
 			setLive(false)
-			setOnCall(true)
+			setHungUp(false)
+			setAnswered(true)
 		},
-		hangUp: () => setOnCall(false),
+		hangUp: () => setHungUp(true),
 		toggleMute: () => setMuted((m) => !m),
 		audio: onCall ? (
 			<Call
@@ -124,7 +137,7 @@ export function useCall({
 				onVoice={onVoice}
 				onLive={setLive}
 				onMicFailed={(error) => {
-					setOnCall(false)
+					setHungUp(true)
 					setNotice(
 						error.name === 'NotAllowedError'
 							? 'Your browser did not let the page use the mic, so you are not on the call.'
@@ -137,9 +150,33 @@ export function useCall({
 }
 
 /**
- * The connection itself: this device's mic goes up to the Cloudflare Realtime
- * SFU, and every other member's comes back down. Mounted only while this member
- * is on the call, so hanging up takes the peer connection and the mic with it.
+ * Reports whether the browser has already given this page the mic, and follows
+ * that answer as it changes. Asking never prompts, so a break's call can open a
+ * mic that is allowed and leave one that is not to the pick-up button.
+ */
+function useMicAllowed() {
+	const [allowed, setAllowed] = useState(false)
+	useEffect(() => {
+		let status: PermissionStatus | undefined
+		const read = () => setAllowed(status?.state === 'granted')
+		navigator.permissions
+			// 'microphone' is a real permission name that the DOM types leave out
+			.query({ name: 'microphone' as PermissionName })
+			.then((result) => {
+				status = result
+				status.addEventListener('change', read)
+				read()
+			})
+			.catch(() => setAllowed(false))
+		return () => status?.removeEventListener('change', read)
+	}, [])
+	return allowed
+}
+
+/**
+ * Pushes this device's mic up to the Cloudflare Realtime SFU and pulls every
+ * other member's back down. React mounts this only while the member is on the
+ * call, so hanging up takes the peer connection and the mic with it.
  *
  * Muting keeps the track flowing with silence rather than stopping it, because
  * the SFU collects a track that has sent nothing for 30 seconds. That is what
@@ -221,7 +258,7 @@ function Call({
 	)
 }
 
-/** One other member's mic, pulled from the SFU into an element of its own. */
+/** Plays one other member's mic, pulled from the SFU into an element of its own. */
 function RemoteMic({ partyTracks, mic }: { partyTracks: PartyTracks; mic: Mic }) {
 	const element = useRef<HTMLAudioElement>(null)
 	const metadata = useMemo<TrackMetadata>(
@@ -246,10 +283,11 @@ function RemoteMic({ partyTracks, mic }: { partyTracks: PartyTracks; mic: Mic })
 }
 
 /**
- * Whole seconds left of the phase while this device is on the call, for the
- * count to the cut. Sleeps until the last seconds rather than re-rendering the
- * call four times a second for a whole break. No dependencies: each render
- * schedules the next tick from where the clock stands now.
+ * Counts the whole seconds left of the phase while this device is on the call,
+ * for the count to the cut. It sleeps until the last seconds rather than
+ * re-rendering the call four times a second for a whole break. The effect takes
+ * no dependencies: each render schedules the next tick from where the clock
+ * stands now.
  */
 function useSecondsLeft(clock: Clock, serverNow: () => number, watching: boolean) {
 	const [, tick] = useState(0)

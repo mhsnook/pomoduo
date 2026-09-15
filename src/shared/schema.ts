@@ -69,9 +69,10 @@ export const trackSchema = z.object({
 export type Track = z.infer<typeof trackSchema>
 
 /**
- * Where the SFU carries one member's mic. The session id here is the SFU's own,
- * nothing to do with the pomoduo session: it changes whenever that device's peer
- * connection is remade, and the others have to pull the mic again when it does.
+ * Validates where the SFU carries one member's mic. The session id belongs to
+ * the SFU and has nothing to do with the pomoduo session: it changes whenever
+ * that device's peer connection is remade, and the others have to pull the mic
+ * again when it does.
  */
 export const micSchema = z.object({
 	sessionId: z.string().max(200),

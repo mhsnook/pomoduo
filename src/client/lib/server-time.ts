@@ -12,7 +12,7 @@ import { type Clock, remainingIn } from '../../shared/clock'
 export const DRIFT_MS = 100
 
 /**
- * Whole seconds left, as the page shows them. Devices within DRIFT_MS of each
+ * Counts the whole seconds left, as the page shows them. Devices within DRIFT_MS of each
  * other count as in step, so this ignores that much: otherwise a device a few
  * ms behind would show 25:01 at the top of a 25 minute phase, and the count to
  * the end of a break would disagree with the face above it.

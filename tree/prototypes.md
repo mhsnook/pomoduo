@@ -175,12 +175,15 @@ build settled:
   room and on every device at once, and the cut lands exactly when the phase
   flips rather than a round trip later.
 - "Every present member is on it with their mic live" cannot be the whole
-  truth on the web, because the first mic prompt needs a click. A device that
-  has picked the call up once answers a break by itself; a device that never
-  has waits for a click. See [Voice](rules.md#voice).
-- The call a session starts with is an invitation, not an answered call: a
-  device that has picked up before does not answer it by itself, because
-  opening a fresh link would then turn a stranger's mic on.
+  truth on the web, because the first mic prompt needs a click. What it means
+  in practice is every member whose browser has already allowed the mic, which
+  the page can ask about without prompting. See [Voice](rules.md#voice).
+- The call a session starts with is an invitation, not an answered call, so it
+  waits for a click even from a browser that allows the mic. Otherwise a mic
+  would go live while its owner was working.
+- Whether a member is muted is theirs, not the call's. A first version cleared
+  it whenever the call opened, which would have quietly unmuted someone who had
+  muted themselves a break earlier.
 - A call that cannot reach the SFU looks exactly like one that can, because
   partytracks retries quietly and its `sessionError$` never fires. The page
   watches the peer connection instead, and says so when the mic has not got

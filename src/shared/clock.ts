@@ -34,7 +34,11 @@ export type Clock = {
 	breakKind: BreakKind
 	/** What the break vote remembers between breaks. */
 	tally: Tally
-	/** Whether the session's call is open. Changed only by the commands below. */
+	/**
+	 * Whether the session's call is open. Only the commands below change it: a
+	 * session starts with it open, starting work closes it, and entering a break
+	 * opens it for a yap break and closes it for a dance one.
+	 */
 	callOpen: boolean
 }
 
@@ -74,7 +78,7 @@ export const freshClock = (durations: Durations = DEFAULT_DURATIONS): Clock => (
 	callOpen: true,
 })
 
-/** The break where people talk: no music, and the call is open. */
+/** Tells a yap break from the other kinds: no music plays, and the call is open. */
 export const isYapBreak = (clock: Clock) =>
 	clock.phase === 'break' && clock.breakKind === 'yap'
 
@@ -91,12 +95,12 @@ const advanced = (clock: Clock, ms: number) =>
 		: { ...clock.playlist, [clock.phase]: clock.playlist[clock.phase] + ms }
 
 /**
- * A phase just entered. A break started fresh is put to the vote, which decides
- * its kind; `votes` is null for a break a jump back returned to, which keeps the
- * kind it had. Either way the phase settles the call, and this is the only place
- * that rule is written.
+ * Settles a phase the clock has just moved into. A break starting fresh takes
+ * the vote, which picks its kind; pass null for `votes` when a jump back has
+ * returned to a break, because it keeps the kind it already had. Either way the
+ * phase decides the call, and this is the only place that rule is written.
  */
-function entered(clock: Clock, votes: BreakKind[] | null): Clock {
+function enterPhase(clock: Clock, votes: BreakKind[] | null): Clock {
 	const voted = clock.phase === 'break' && votes ? decide(votes, clock.tally) : null
 	const settled = voted ? { ...clock, breakKind: voted.kind, tally: voted.tally } : clock
 	return { ...settled, callOpen: isYapBreak(settled) }
@@ -140,7 +144,7 @@ function nextPhase(
 	const next = otherPhase(clock.phase)
 	const playlist = advanced(clock, elapsedIn(clock, now))
 	const moved = { ...at(clock, next, clock.durations[next], running, now), playlist }
-	return entered(moved, votes)
+	return enterPhase(moved, votes)
 }
 
 /**
@@ -163,7 +167,7 @@ function nudge(clock: Clock, deltaMs: number, now: number, votes: BreakKind[]): 
 	const prevDuration = clock.durations[prev]
 	const under = Math.min(-target, prevDuration)
 	const playlist = { ...clock.playlist, [prev]: clock.playlist[prev] - prevDuration }
-	return entered({ ...at(clock, prev, under, running, now), playlist }, null)
+	return enterPhase({ ...at(clock, prev, under, running, now), playlist }, null)
 }
 
 /**
@@ -230,7 +234,7 @@ export function apply(
 				endsAt: clock.endsAt + clock.durations[next],
 				playlist: advanced(clock, clock.durations[clock.phase]),
 			}
-			return entered(moved, votes)
+			return enterPhase(moved, votes)
 		}
 	}
 }
@@ -244,7 +248,7 @@ export const startsBreak = (before: Clock, after: Clock, command: Command) =>
 	after.phase === 'break' &&
 	!(command.type === 'nudge' && command.deltaMs < 0)
 
-/** The clock a row carries, without the record of the change that made it. */
+/** Takes the clock out of a row, leaving behind the record of the change that made it. */
 export const clockOf = (row: ClockRow): Clock => ({
 	phase: row.phase,
 	endsAt: row.endsAt,

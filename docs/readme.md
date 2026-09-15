@@ -25,11 +25,12 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   for the break this pomo ends in. Not picking counts as dance. The losing
   kind banks its votes for next time, so a 50-50 duo takes turns and a lone
   holdout gets their way now and then. Picks clear when the break starts.
-- **Yap breaks** play no music and have no dance floor. The call opens instead:
-  every member's mic goes on, and it cuts when work starts again. A device that
-  has picked the call up once joins later breaks by itself, and you can mute or
-  hang up at any point. The call needs a Cloudflare Realtime app on the server;
-  without one the page says so rather than pretending.
+- **Yap breaks** play no music and have no dance floor. The call opens instead,
+  and it cuts when work starts again. Every mic your browser has already allowed
+  goes on with it; the first time, you pick up and the browser asks. Your mute is
+  yours and stays where you left it, and hanging up takes you off that one call.
+  The call needs a Cloudflare Realtime app on the server; without one the page
+  says so rather than pretending.
 - **The phase lengths** belong to the session. Changing them in Settings
   changes them for everyone.
 - **The soundtrack.** Each phase has its own YouTube playlist, as in pomodance.

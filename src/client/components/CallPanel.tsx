@@ -8,7 +8,7 @@ import { type CallState, useCall, type VoiceState } from '../session/call'
 const listNames = (members: Member[]) =>
 	members.map((m) => displayName(m.name)).join(' and ')
 
-/** What the call is doing, in a sentence. */
+/** Says what the call is doing, in a sentence. */
 function stateLine(call: CallState, alsoOn: Member[]) {
 	if (!call.open) return 'The call is closed. A yap break opens it.'
 	if (call.waiting) return 'Getting your mic on the call…'
@@ -22,8 +22,8 @@ function stateLine(call: CallState, alsoOn: Member[]) {
 }
 
 /**
- * The session's call: whether it is open, whether you are on it, and your mic.
- * It opens on a yap break and cuts when work starts.
+ * Draws the session's call: whether it is open, whether you are on it, and your
+ * mic. The call opens on a yap break and cuts when work starts.
  */
 export function CallPanel({
 	clock,

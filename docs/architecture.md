@@ -72,31 +72,21 @@ A yap break plays no music, so its playlist does not move on.
 
 ## The call
 
-A session has one call, open or closed for everyone at once. `callOpen` is a
-column of the clock row, so it changes only through `apply`, like every other
-part of the clock:
+The call is one thing the session shares and three things each member decides,
+and the split is what makes it worth writing down here.
 
-- A session starts with the call open, and starting work closes it.
-- Entering a break opens the call if the break is a yap one and closes it
-  otherwise, however the phase changed: a skip, a rollover, or a jump either
-  way.
+The session's part is `callOpen`, a column of the clock row, so `apply` settles
+it along with the phase and every device reaches the same answer at the same
+moment. `src/shared/clock.ts` says when it opens and closes.
 
-Whether a member is on the call is their own, and `members` carries it in three
-columns: `onCall` once they have picked up, `muted`, and `mic`, the SFU session
-and track name the others pull their voice from. A device that has picked the
-call up before joins a break's call by itself; before that it waits for a
-click, because the first mic prompt needs one.
-
-`src/client/session/call.tsx` is this device's end of the call: `useCall` holds
-whether you are on it, your mute, and the notices, and the connection inside it
-exists only while you are on the call, so hanging up takes the peer connection
-and the mic with it. partytracks pushes the mic to the SFU and pulls every other
-member's, each into an audio element of its own. Muting swaps a silent track in
-rather than stopping the stream, because the SFU collects a track that has sent
-nothing for thirty seconds. `components/CallPanel.tsx` only draws it.
+A member's part is three columns of their `members` row, written through
+`POST .../voice`: whether they have picked up, whether they are muted, and
+where the SFU carries their mic for the others to pull.
+`src/client/session/call.tsx` holds the connection and says what those three
+mean together.
 
 When the call closes, each device comes off it as its own clock reaches the
-same place, and the room clears `onCall` and `mic` for anyone who did not. A
+same place, and the room clears the call columns for anyone who did not. A
 member who leaves the session comes off the call with them.
 
 ## A device

@@ -169,12 +169,19 @@ When the call opens:
   live, unless they mute or hang up.
 - A knock opens the call mid-work for the members who accepted.
 
-Picking up is each member's own, and on the web the first one has to be a
-click: no browser hands a page the mic without one. So a device that has picked
-the call up before answers a break's call by itself, with its mic live, and one
-that never has waits for a click. The call a session starts with is an
-invitation rather than a call anyone is on, so nobody answers it by themselves;
-otherwise opening a fresh link would turn a stranger's mic on.
+Three things decide whether a member's mic is live, and none of them moves the
+others. The browser has given the page the mic, or it has not. The member is
+muted, or they are not. The call is open, or it is closed.
+
+The first of those has to start with a click, because no browser hands a page
+the mic without one; after that the browser remembers, and a break's call opens
+every mic it has already allowed. The call a session starts with waits for a
+click too: it is an invitation rather than a call anyone is on, so nobody's mic
+goes live while they are working.
+
+A member's mute is theirs. It carries from one call to the next, and opening or
+closing a call never moves it. Hanging up is the exception that belongs to one
+call: it takes you off that one, and the next one starts without it.
 
 When the call closes:
 

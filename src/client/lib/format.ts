@@ -9,7 +9,7 @@ export function formatClock(seconds: number) {
 export const keepIfSame = <T>(prev: T, next: T) =>
 	JSON.stringify(prev) === JSON.stringify(next) ? prev : next
 
-/** What a member is called before they have said. */
+/** Names a member who has not told the session what to call them. */
 export const displayName = (name: string) => name || 'someone'
 
 export function cn(...parts: Array<string | false | null | undefined>) {

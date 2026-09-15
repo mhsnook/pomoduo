@@ -6,6 +6,7 @@
  * reach the same clock. The rules live in tree/rules.md under "The clock".
  */
 
+import type { ClockRow } from './schema'
 import { type BreakKind, decide, DEFAULT_KIND, freshTally, type Tally } from './vote'
 
 export type Phase = 'work' | 'break'
@@ -33,6 +34,12 @@ export type Clock = {
 	breakKind: BreakKind
 	/** What the break vote remembers between breaks. */
 	tally: Tally
+	/**
+	 * Whether the session's call is open. Only the commands below change it: a
+	 * session starts with it open, starting work closes it, and entering a break
+	 * opens it for a yap break and closes it for a dance one.
+	 */
+	callOpen: boolean
 }
 
 export type Command =
@@ -67,25 +74,36 @@ export const freshClock = (durations: Durations = DEFAULT_DURATIONS): Clock => (
 	playlist: { work: 0, break: 0 },
 	breakKind: DEFAULT_KIND,
 	tally: freshTally(),
+	// a session starts with the call open, and starting work closes it
+	callOpen: true,
 })
 
+/** Tells a yap break from the other kinds: no music plays, and the call is open. */
+export const isYapBreak = (clock: Clock) =>
+	clock.phase === 'break' && clock.breakKind === 'yap'
+
 /** Whether the current phase has music: while it runs, unless it is a yap break. */
-export const musicPlays = (clock: Clock) =>
-	clock.endsAt !== null && !(clock.phase === 'break' && clock.breakKind === 'yap')
+export const musicPlays = (clock: Clock) => clock.endsAt !== null && !isYapBreak(clock)
 
 /**
  * The playlists with the current phase's moved on by `ms`. A yap break plays
  * no music, so its playlist stays where it was.
  */
 const advanced = (clock: Clock, ms: number) =>
-	clock.phase === 'break' && clock.breakKind === 'yap'
+	isYapBreak(clock)
 		? clock.playlist
 		: { ...clock.playlist, [clock.phase]: clock.playlist[clock.phase] + ms }
 
-/** Work is over: the vote decides what kind of break this is. */
-function enterBreak(clock: Clock, votes: BreakKind[]): Clock {
-	const { kind, tally } = decide(votes, clock.tally)
-	return { ...clock, breakKind: kind, tally }
+/**
+ * Settles a phase the clock has just moved into. A break starting fresh takes
+ * the vote, which picks its kind; pass null for `votes` when a jump back has
+ * returned to a break, because it keeps the kind it already had. Either way the
+ * phase decides the call, and this is the only place that rule is written.
+ */
+function enterPhase(clock: Clock, votes: BreakKind[] | null): Clock {
+	const voted = clock.phase === 'break' && votes ? decide(votes, clock.tally) : null
+	const settled = voted ? { ...clock, breakKind: voted.kind, tally: voted.tally } : clock
+	return { ...settled, callOpen: isYapBreak(settled) }
 }
 
 /** What is left on the clock, whether it runs or not. */
@@ -126,7 +144,7 @@ function nextPhase(
 	const next = otherPhase(clock.phase)
 	const playlist = advanced(clock, elapsedIn(clock, now))
 	const moved = { ...at(clock, next, clock.durations[next], running, now), playlist }
-	return next === 'break' ? enterBreak(moved, votes) : moved
+	return enterPhase(moved, votes)
 }
 
 /**
@@ -149,7 +167,7 @@ function nudge(clock: Clock, deltaMs: number, now: number, votes: BreakKind[]): 
 	const prevDuration = clock.durations[prev]
 	const under = Math.min(-target, prevDuration)
 	const playlist = { ...clock.playlist, [prev]: clock.playlist[prev] - prevDuration }
-	return { ...at(clock, prev, under, running, now), playlist }
+	return enterPhase({ ...at(clock, prev, under, running, now), playlist }, null)
 }
 
 /**
@@ -167,7 +185,13 @@ export function apply(
 	const running = clock.endsAt !== null
 	switch (command.type) {
 		case 'start':
-			return running ? null : { ...clock, endsAt: now + clock.remainingMs }
+			return running
+				? null
+				: {
+						...clock,
+						endsAt: now + clock.remainingMs,
+						callOpen: clock.phase === 'work' ? false : clock.callOpen,
+					}
 		case 'pause':
 			return running
 				? { ...clock, endsAt: null, remainingMs: remainingIn(clock, now) }
@@ -210,7 +234,7 @@ export function apply(
 				endsAt: clock.endsAt + clock.durations[next],
 				playlist: advanced(clock, clock.durations[clock.phase]),
 			}
-			return next === 'break' ? enterBreak(moved, votes) : moved
+			return enterPhase(moved, votes)
 		}
 	}
 }
@@ -223,6 +247,18 @@ export const startsBreak = (before: Clock, after: Clock, command: Command) =>
 	before.phase === 'work' &&
 	after.phase === 'break' &&
 	!(command.type === 'nudge' && command.deltaMs < 0)
+
+/** Takes the clock out of a row, leaving behind the record of the change that made it. */
+export const clockOf = (row: ClockRow): Clock => ({
+	phase: row.phase,
+	endsAt: row.endsAt,
+	remainingMs: row.remainingMs,
+	durations: row.durations,
+	playlist: row.playlist,
+	breakKind: row.breakKind,
+	tally: row.tally,
+	callOpen: row.callOpen,
+})
 
 /** What a command asks of a device's video. */
 export type VideoEffect = {

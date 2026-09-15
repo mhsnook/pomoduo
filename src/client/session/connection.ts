@@ -4,6 +4,7 @@ import { createPartyDb, definePartyCollection, partyTransport } from 'party-db/c
 import {
 	apply,
 	type Clock,
+	clockOf,
 	type Command,
 	freshClock,
 	type MemberCommand,
@@ -22,8 +23,10 @@ import {
 	trackSchema,
 } from '../../shared/schema'
 import { type BreakKind, DEFAULT_KIND } from '../../shared/vote'
+import { displayName } from '../lib/format'
 import { memberId } from '../lib/member'
 import { firstSync, resync, type ServerTime, serverNowOf } from '../lib/server-time'
+import type { VoiceState } from './call'
 
 /** Something the page should react to, beyond re-rendering. */
 export type SessionEvent =
@@ -43,16 +46,6 @@ export type SessionState = {
 	/** Who made the room's last change, for the byline under the clock. */
 	lastChange: Pick<ClockRow, 'actor' | 'command' | 'deltaMs' | 'stampedAt'> | null
 }
-
-const clockOf = (row: ClockRow): Clock => ({
-	phase: row.phase,
-	endsAt: row.endsAt,
-	remainingMs: row.remainingMs,
-	durations: row.durations,
-	playlist: row.playlist,
-	breakKind: row.breakKind,
-	tally: row.tally,
-})
 
 const commandOf = (row: ClockRow) =>
 	({ type: row.command, deltaMs: row.deltaMs }) as Command
@@ -163,7 +156,7 @@ export class SessionConnection {
 		this.own.add(id)
 		this.pending.add(id)
 		if (after) this.change(before, after, command)
-		void this.send({ id, actor: this.actor() || 'someone', command })
+		void this.send({ id, actor: displayName(this.actor()), command })
 	}
 
 	private async send(request: CommandRequest) {
@@ -255,21 +248,27 @@ export class SessionConnection {
 		return this.state.members.filter((m) => m.here).map((m) => m.vote ?? DEFAULT_KIND)
 	}
 
-	/** Pick a kind of break for the end of this pomo, or take the pick back with null. */
-	vote(kind: BreakKind | null) {
-		void fetch(`${this.base}/vote`, {
+	/** Tell the room something about this member, and don't wait to hear back. */
+	private tell(action: string, body: object) {
+		void fetch(`${this.base}/${action}`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ id: this.memberId, vote: kind }),
+			body: JSON.stringify({ id: this.memberId, ...body }),
 		}).catch((error) => console.error(error))
 	}
 
+	/** Pick a kind of break for the end of this pomo, or take the pick back with null. */
+	vote(kind: BreakKind | null) {
+		this.tell('vote', { vote: kind })
+	}
+
+	/** Say how this device sits on the call, and where the others can pull its mic. */
+	voice = (state: VoiceState) => {
+		this.tell('voice', state)
+	}
+
 	updateMember(details: { name: string; intention: string }) {
-		void fetch(`${this.base}/member`, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ id: this.memberId, ...details }),
-		}).catch((error) => console.error(error))
+		this.tell('member', details)
 	}
 
 	/** A video's length, if any member's player has loaded it. */
@@ -279,11 +278,7 @@ export class SessionConnection {
 	learnLength(videoId: string, durationMs: number) {
 		if (this.tracks.has(videoId) || this.shared.has(videoId) || !(durationMs > 0)) return
 		this.shared.add(videoId)
-		void fetch(`${this.base}/track`, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ id: videoId, durationMs }),
-		}).catch((error) => console.error(error))
+		this.tell('track', { id: videoId, durationMs })
 	}
 
 	getState = () => this.state

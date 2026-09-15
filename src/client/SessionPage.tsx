@@ -21,6 +21,7 @@ import {
 	placeIn,
 } from '../shared/clock'
 import type { ClockRow } from '../shared/schema'
+import { CallPanel } from './components/CallPanel'
 import { Clock } from './components/Clock'
 import { Ledger } from './components/Ledger'
 import { Members } from './components/Members'
@@ -710,6 +711,15 @@ function Session({
 
 				<aside className="flex flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
 					<Members members={members} you={connection.memberId} />
+					{status === 'live' && (
+						<CallPanel
+							clock={clock}
+							members={members}
+							you={connection.memberId}
+							serverNow={connection.serverNow}
+							onVoice={connection.voice}
+						/>
+					)}
 					<VotePanel
 						clock={clock}
 						members={members}

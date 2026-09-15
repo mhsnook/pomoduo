@@ -1,5 +1,7 @@
+import { Mic, MicOff } from 'lucide-react'
+
 import type { Member } from '../../shared/schema'
-import { cn } from '../lib/format'
+import { cn, displayName } from '../lib/format'
 
 /** Who is in the session, and what each of them is working on. */
 export function Members({ members, you }: { members: Member[]; you: string }) {
@@ -32,13 +34,25 @@ export function Members({ members, you }: { members: Member[]; you: string }) {
 									member.here ? 'bg-success' : 'bg-current/40',
 								)}
 							/>
-							<span className="font-bold">{member.name || 'someone'}</span>
+							<span className="font-bold">{displayName(member.name)}</span>
 							{member.id === you && <span className="opacity-60">you</span>}
-							{member.vote && (
-								<span title={`picked ${member.vote} for this break`} className="ml-auto">
-									{member.vote === 'dance' ? '💃' : '💬'}
-								</span>
-							)}
+							<span className="ml-auto flex items-center gap-1.5">
+								{member.vote && (
+									<span title={`picked ${member.vote} for this break`}>
+										{member.vote === 'dance' ? '💃' : '💬'}
+									</span>
+								)}
+								{member.onCall &&
+									member.mic &&
+									(member.muted ? (
+										<MicOff
+											className="size-4 opacity-60"
+											aria-label="on the call, muted"
+										/>
+									) : (
+										<Mic className="size-4" aria-label="on the call" />
+									))}
+							</span>
 							{!member.here && <span className="opacity-60">away</span>}
 						</span>
 						<span className="truncate opacity-80" title={member.intention}>

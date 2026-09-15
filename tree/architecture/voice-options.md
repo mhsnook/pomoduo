@@ -2,6 +2,11 @@
 
 Researched 2026-09-10 against primary sources. Context: TanStack Start on Cloudflare Workers, Durable Object (DO) per room, voice-only, 2 people typical, up to about 6.
 
+Read with [Browsers](../architecture.md#browsers) in mind: Safari and iOS went
+out of scope on 2026-09-15, so the mobile Safari and background-audio rows
+below no longer constrain the choice. They are left as written, because the
+research is a record of what was known on the day.
+
 ## Question this answers
 
 What should carry the audio between participants: Cloudflare Realtime SFU (or RealtimeKit), a browser P2P mesh signalled through a DO, or a managed third party? Compared on price, signalling and TURN, DO fit, mic-only and mute semantics, mobile Safari and background tabs, ringing, and effort for one developer.

@@ -45,9 +45,8 @@ export function App() {
 		>
 			<h1 className="font-display text-5xl">🍅 pomoduo</h1>
 			<p className="font-ui max-w-md opacity-80">
-				A pomodoro timer for coworking with a friend. Say what you are about to work on
-				and the clock starts. Send your friend the link, and you work to the same clock.
-				Then dance on the break.
+				Make a tiny playlist for chill work music, and then have a dance break! 🪩💃 Use
+				it alone or invite a friend.
 			</p>
 			<form
 				className="flex w-full max-w-md flex-col gap-4 text-left"
@@ -72,9 +71,6 @@ export function App() {
 					Start working
 				</button>
 			</form>
-			<p className="font-ui text-xs opacity-60">
-				Works alone too. Keep the link to come back to it.
-			</p>
 		</main>
 	)
 }

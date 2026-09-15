@@ -120,6 +120,49 @@ function describe(change: Pick<ClockRow, 'actor' | 'command' | 'deltaMs'>) {
 	}
 }
 
+/**
+ * Asked for once a friend turns up, so they see a name rather than "someone".
+ * The draft stays in here until Done: a name saved letter by letter would close
+ * the dialog on the first one.
+ */
+function NameDialog({
+	onSave,
+	onDismiss,
+}: {
+	onSave: (name: string) => void
+	onDismiss: () => void
+}) {
+	const [name, setName] = useState('')
+	return (
+		<Modal testId="name-dialog" onDismiss={onDismiss}>
+			<h2 className="font-display text-2xl">What should your friend see you as?</h2>
+			<p className="text-sm opacity-75">
+				Your name shows next to the changes you make to the clock.
+			</p>
+			<form
+				className="flex flex-col gap-4"
+				onSubmit={(e) => {
+					e.preventDefault()
+					onSave(name)
+				}}
+			>
+				<SettingInput
+					testId="name-input"
+					autoFocus
+					label="Your name"
+					value={name}
+					onChange={(v) => setName(v.slice(0, 40))}
+				/>
+				<div className="modal-action">
+					<button type="submit" data-testid="name-done" className="btn btn-primary">
+						Done
+					</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}
+
 /** Opens the connection to one session, and closes it when the page leaves. */
 export function SessionPage({
 	sessionId,
@@ -204,8 +247,17 @@ function Session({
 	const [editing, setEditing] = useState<Pomo | null>(null)
 	const [askRollover, setAskRollover] = useState(false)
 	const [showSettings, setShowSettings] = useState(false)
-	const [askName, setAskName] = useState(!settings.name)
+	const [nameAsked, setNameAsked] = useState(false)
 	const [copied, setCopied] = useState(false)
+
+	// A name is for your friend to read, so we ask for one once a friend is here
+	// and not before. Settings holds the same field, so a name cleared in there
+	// does not count as needing one.
+	const askName =
+		!settings.name &&
+		!nameAsked &&
+		!showSettings &&
+		members.some((m) => m.here && m.id !== connection.memberId)
 
 	const [tracks, setTracks] = useState<
 		Record<Phase, { index: number; startMs: number; loadKey: number }>
@@ -750,31 +802,13 @@ function Session({
 			</footer>
 
 			{askName && (
-				<Modal testId="name-dialog" onDismiss={() => setAskName(false)}>
-					<h2 className="font-display text-2xl">What should your friend see you as?</h2>
-					<p className="text-sm opacity-75">
-						Your name shows next to the changes you make to the clock.
-					</p>
-					<form
-						className="flex flex-col gap-4"
-						onSubmit={(e) => {
-							e.preventDefault()
-							setAskName(false)
-						}}
-					>
-						<SettingInput
-							testId="name-input"
-							label="Your name"
-							value={settings.name}
-							onChange={(v) => updateSettings({ name: v.slice(0, 40) })}
-						/>
-						<div className="modal-action">
-							<button type="submit" data-testid="name-done" className="btn btn-primary">
-								Done
-							</button>
-						</div>
-					</form>
-				</Modal>
+				<NameDialog
+					onSave={(name) => {
+						updateSettings({ name })
+						setNameAsked(true)
+					}}
+					onDismiss={() => setNameAsked(true)}
+				/>
 			)}
 
 			{showSettings && (

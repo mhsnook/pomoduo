@@ -6,8 +6,19 @@
  * step".
  */
 
+import { type Clock, remainingIn } from '../../shared/clock'
+
 /** An offset only moves when it is off by more than this. */
 export const DRIFT_MS = 100
+
+/**
+ * Counts the whole seconds left, as the page shows them. Devices within DRIFT_MS of each
+ * other count as in step, so this ignores that much: otherwise a device a few
+ * ms behind would show 25:01 at the top of a 25 minute phase, and the count to
+ * the end of a break would disagree with the face above it.
+ */
+export const secondsOf = (clock: Clock, now: number) =>
+	Math.ceil(Math.max(0, remainingIn(clock, now) - DRIFT_MS) / 1000)
 
 export type ServerTime = {
 	/** Add to a steady time to get server time. */

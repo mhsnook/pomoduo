@@ -32,7 +32,12 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   is here, and as dance when you are alone. The losing kind banks its votes for
   next time, so a 50-50 duo takes turns and a lone holdout gets their way now
   and then. Picks clear when the break starts.
-- **Yap breaks** play no music and have no dance floor. Voice comes later.
+- **Yap breaks** play no music and have no dance floor. The call opens instead,
+  and it cuts when work starts again. Every mic your browser has already allowed
+  goes on with it; the first time, you pick up and the browser asks. Your mute is
+  yours and stays where you left it, and hanging up takes you off that one call.
+  The call needs a Cloudflare Realtime app on the server; without one the page
+  says so rather than pretending.
 - **The phase lengths** belong to the session. Changing them in Settings
   changes them for everyone.
 - **The soundtrack.** Each phase has its own YouTube playlist, as in pomodance.
@@ -43,10 +48,16 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   intention, a review, and a history of past days. A pomo's length is the time
   the clock actually ran, without the pauses. The ledger lives on the device.
 
+## Where it runs
+
+Desktop Chromium browsers: Chrome, Edge, Arc, Brave. Nothing stops you opening
+it elsewhere, and most of it will work, but the call is only tested here.
+
 ## Not yet
 
-Voice, chat, identity beyond a typed name on each device, and a ledger that
-follows you across devices. Each of these is in the tree.
+Chat, the knock that opens voice mid-work, ringing a friend who is not on the
+page, identity beyond a typed name on each device, and a ledger that follows
+you across devices. Each of these is in the tree.
 
 ## Differences from pomodance
 

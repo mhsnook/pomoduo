@@ -6,12 +6,12 @@
   "compatibility_flags": ["nodejs_compat"],
 
   // The built client. Any path that is not a file gets index.html, so the app
-  // handles its own routes. Session traffic goes to the Worker first.
+  // handles its own routes. Session and call traffic go to the Worker first.
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist/client",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/parties/*"],
+    "run_worker_first": ["/parties/*", "/partytracks/*"],
   },
 
   // One Durable Object per session, holding the shared clock.

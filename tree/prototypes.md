@@ -138,8 +138,8 @@ Tests: [User-owned tables in party-db](architecture.md#user-owned-tables-in-part
 Question: what is the smallest change to party-db that makes this true, and
 what does it cost the transparent and RDBMS modes that exist today?
 
-Built on 2026-09-15 on party-db's `user-owned-tables` branch, not merged or
-published. A collection declares `ownerColumn`, the uid is `claims.sub` from
+Built on 2026-09-15 on party-db's `user-owned-tables` branch, open as a pull
+request there and not merged or published yet. A collection declares `ownerColumn`, the uid is `claims.sub` from
 the existing `auth` hook, writes are stamped and checked, and the snapshot,
 backlog, and fan-out carry only a socket's own rows. A room with no access
 declarations behaves exactly as before. 239 unit and 57 integration tests
@@ -163,7 +163,43 @@ Tests: [Voice](rules.md#voice), [Chat](rules.md#chat),
 [The break vote](rules.md#the-break-vote-and-its-decay), and
 [Voice transport](architecture.md#voice-transport).
 
-Question: does the moment at the end of a break land, and does the SFU mute
-trick hold up on a phone?
+Question: does the moment at the end of a break land?
 
-Blocked by: [A shared clock over the real transport](#open-a-shared-clock-over-the-real-transport).
+The voice half was built on 2026-09-15, up to the point where it needs a real
+Cloudflare Realtime app, which is Em's to make. Chat is not built. What the
+build settled:
+
+- Whether the call is open is a column of the clock row, so it changes only
+  through `apply`, like the break kind. Every rule about when the call opens
+  and closes then falls out of the phase changes that already exist, on the
+  room and on every device at once, and the cut lands exactly when the phase
+  flips rather than a round trip later.
+- "Every present member is on it with their mic live" cannot be the whole
+  truth on the web, because the first mic prompt needs a click. What it means
+  in practice is every member whose browser has already allowed the mic, which
+  the page can ask about without prompting. See [Voice](rules.md#voice).
+- The call a session starts with is an invitation, not an answered call, so it
+  waits for a click even from a browser that allows the mic. Otherwise a mic
+  would go live while its owner was working.
+- Whether a member is muted is theirs, not the call's. A first version cleared
+  it whenever the call opened, which would have quietly unmuted someone who had
+  muted themselves a break earlier.
+- A call that cannot reach the SFU looks exactly like one that can, because
+  partytracks retries quietly and its `sessionError$` never fires. The page
+  watches the peer connection instead, and says so when the mic has not got
+  through.
+
+This question used to ask a second thing: whether the SFU mute trick holds up
+on a phone. partytracks keeps a muted track alive by pushing an inaudible
+oscillator, which comes from an AudioContext, and iOS suspends an AudioContext
+in a backgrounded tab — so a mute that outlasted the SFU's thirty second
+collector was the sharp risk. [Browsers](architecture.md#browsers) put Safari
+and iOS out of scope on 2026-09-15, and that half of the question went with
+them.
+
+Checked in local dev with two headless Chrome profiles: a yap break opened the
+call on both, each saw the other pick up, the count ran 3, 2, 1 in step with
+the clock face, and work closed the call and cleared both mics. The Realtime
+app exists as of 2026-09-15, but nobody has heard audio come out of this yet.
+
+Blocked by: nothing. What is left is two people and a yap break.

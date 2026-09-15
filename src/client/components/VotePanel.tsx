@@ -1,19 +1,14 @@
 import type { Clock } from '../../shared/clock'
 import type { Member } from '../../shared/schema'
-import {
-	BREAK_KINDS,
-	type BreakKind,
-	defaultKind,
-	standing,
-	votesOf,
-} from '../../shared/vote'
+import { BREAK_KINDS, type BreakKind, defaultKind, standing } from '../../shared/vote'
 import { cn } from '../lib/format'
 
 export const KIND_LABEL: Record<BreakKind, string> = { dance: '💃 Dance', yap: '💬 Yap' }
 
 /**
  * The break vote: pick the kind of break this pomo ends in, and see how it
- * stands. Not picking counts as a yap in company, a dance alone.
+ * stands. Not picking is not a vote; a room that picks nothing gets a yap in
+ * company, a dance alone.
  */
 export function VotePanel({
 	clock,
@@ -27,7 +22,7 @@ export function VotePanel({
 	onVote: (kind: BreakKind | null) => void
 }) {
 	const here = members.filter((m) => m.here)
-	const votes = votesOf(here.map((m) => m.vote))
+	const votes = here.map((m) => m.vote)
 	const { total, leader } = standing(votes, clock.tally)
 	const mine = members.find((m) => m.id === you)?.vote ?? null
 	const inBreak = clock.phase === 'break'
@@ -66,8 +61,9 @@ export function VotePanel({
 				. {leader === 'dance' ? 'Dance' : 'Yap'} wins if work ends now.
 			</p>
 			<p className="text-xs opacity-60">
-				Not picking counts as {defaultKind(here.length)}. A side that loses keeps its
-				votes for next time.
+				Saying nothing is not a vote. With nobody picking it is a{' '}
+				{defaultKind(here.length)} break, and a side that loses keeps its votes for next
+				time.
 			</p>
 		</section>
 	)

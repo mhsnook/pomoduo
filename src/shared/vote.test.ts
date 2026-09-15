@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { type BreakKind, decide, freshTally, type Tally, votesOf } from './vote'
+import { type BreakKind, decide, freshTally, type Tally, type Vote } from './vote'
 
 /** The kinds that win when the same votes are cast at the end of every pomo. */
-function run(votes: BreakKind[], pomos: number) {
+function run(votes: Vote[], pomos: number) {
 	let tally: Tally = freshTally()
 	const kinds: BreakKind[] = []
 	for (let i = 0; i < pomos; i++) {
@@ -59,21 +59,34 @@ describe('the break vote', () => {
 	})
 })
 
-describe('what silence counts as', () => {
-	it('is a dance on your own', () => {
-		expect(votesOf([null])).toEqual(['dance'])
+describe('saying nothing', () => {
+	it('is not a vote, so one pick decides it', () => {
+		expect(decide(['dance', null], freshTally()).kind).toBe('dance')
+		expect(decide(['yap', null], freshTally()).kind).toBe('yap')
 	})
 
-	it('is a yap once there is someone to yap with', () => {
-		expect(votesOf([null, null])).toEqual(['yap', 'yap'])
-		expect(decide(votesOf([null, null]), freshTally()).kind).toBe('yap')
+	it('banks nothing, because nothing was cast', () => {
+		expect(decide(['dance', null], freshTally()).tally.bank).toEqual({
+			dance: 0,
+			yap: 0,
+		})
 	})
 
-	it('leaves the picks people did make alone', () => {
-		expect(votesOf(['dance', null, 'yap'])).toEqual(['dance', 'yap', 'yap'])
+	it('leaves a room that says nothing with the kind that suits its size', () => {
+		expect(decide([null], freshTally()).kind).toBe('dance')
+		expect(decide([null, null], freshTally()).kind).toBe('yap')
 	})
 
-	it('still gives the first tie to dance, so one pick beats one silence', () => {
-		expect(decide(votesOf(['dance', null]), freshTally()).kind).toBe('dance')
+	it('does not take turns, because a quiet room is not a tie', () => {
+		expect(run([null, null], 4)).toEqual(['yap', 'yap', 'yap', 'yap'])
+	})
+
+	it('still lets a banked side through a quiet room', () => {
+		const banked: Tally = { bank: { dance: 2, yap: 0 }, lastLoser: 'dance' }
+		expect(decide([null, null], banked).kind).toBe('dance')
+	})
+
+	it('does not stop the people who did vote from taking turns', () => {
+		expect(run(['dance', 'yap', null], 4)).toEqual(['dance', 'yap', 'dance', 'yap'])
 	})
 })

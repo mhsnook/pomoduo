@@ -122,12 +122,18 @@ yap. Until voice exists, a yap break is a break with no music.
 
 Em replaced the decay-factor weights with a bank on 2026-09-15. It needs
 almost no weighting and still hears everyone, eventually. It does not have to
-be the fairest vote possible. Silence counted as dance until later that day,
-when it became yap in company: two people who say nothing about the break are
-there for each other, and a person alone has nobody to talk to.
+be the fairest vote possible. Silence counted as a dance vote until later that
+day. Counting it as a vote at all was the mistake: a member who said nothing
+cancelled out a member who had picked. A vote is a vote now, and silence is
+silence. What leans yap in company is the room nobody voted in at all: two
+people who say nothing about the break are there for each other, and a person
+alone has nobody to talk to.
 
-- Each member who is here counts one vote: their pick, or, if they did not
-  pick, yap when somebody else is here and dance when they are alone.
+- Each member who is here may cast one vote. Saying nothing is not a vote: it
+  neither helps a kind nor stands in another member's way, and it banks
+  nothing.
+- A room where nobody voted, and where neither kind has a bank, gets a yap
+  when more than one person is here and a dance when somebody is alone.
 - Each kind has a bank. A kind's total is its votes plus its bank. The higher
   total wins. On a tie, the kind that lost last time wins, and dance wins the
   very first tie.
@@ -144,6 +150,8 @@ What that does, with the same picks every pomo:
 | Room                 | Result                                    |
 | -------------------- | ----------------------------------------- |
 | Unanimous            | Always the same kind                      |
+| Nobody votes         | Yap every time, or dance on your own      |
+| One votes, one quiet | The kind that was voted for, every time   |
 | Two people, one each | Dance, yap, dance, yap                    |
 | Three people, 2-1    | The one gets their way every other break  |
 | Five people, 4-1     | The one gets their way every fourth break |

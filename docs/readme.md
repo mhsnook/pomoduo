@@ -28,10 +28,12 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   page as it scrolls, so a glance finds them all. A break puts the intention
   away: the pomo it belonged to is filed in the ledger by then.
 - **The break vote.** Under the members list, each member picks dance or yap
-  for the break this pomo ends in. Not picking counts as yap when someone else
-  is here, and as dance when you are alone. The losing kind banks its votes for
-  next time, so a 50-50 duo takes turns and a lone holdout gets their way now
-  and then. Picks clear when the break starts.
+  for the break this pomo ends in. Saying nothing is not a vote: it cancels
+  nobody else's pick and banks nothing, so one pick in a quiet room carries it.
+  A room that picks nothing at all gets a yap when someone else is here, and a
+  dance when you are alone. The losing kind banks its votes for next time, so a
+  50-50 duo takes turns and a lone holdout gets their way now and then. Picks
+  clear when the break starts.
 - **Yap breaks** play no music and have no dance floor. The call opens instead,
   and it cuts when work starts again. Every mic your browser has already allowed
   goes on with it; the first time, you pick up and the browser asks. Your mute is

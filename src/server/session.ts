@@ -27,7 +27,7 @@ import {
 	voiceSchema,
 	voteSchema,
 } from '../shared/schema'
-import { type BreakKind, FIRST_KIND, freshTally, votesOf } from '../shared/vote'
+import { FIRST_KIND, freshTally, type Vote } from '../shared/vote'
 
 type SocketState = { memberId: string | null }
 
@@ -430,20 +430,19 @@ export class Session extends PartyDbServer<Env> {
 
 	// ---- the break vote ----
 
-	private async vote({ id, vote }: { id: string; vote: BreakKind | null }) {
+	private async vote({ id, vote }: { id: string; vote: Vote }) {
 		const member = this.readMember(id)
 		if (member?.vote === vote) return
 		const base = member ?? blankMember(id, this.isHere(id))
 		await this.writeMember(member, { ...base, vote })
 	}
 
-	/** One vote for each member who is here: their pick, or what silence counts as. */
-	private votes(): BreakKind[] {
-		const picks = this.ctx.storage.sql
+	/** One entry for each member who is here: the kind they picked, or nothing. */
+	private votes(): Vote[] {
+		return this.ctx.storage.sql
 			.exec('SELECT vote FROM members WHERE here = 1')
 			.toArray()
 			.map((r) => (r.vote === 'dance' || r.vote === 'yap' ? r.vote : null))
-		return votesOf(picks)
 	}
 
 	// ---- the call ----

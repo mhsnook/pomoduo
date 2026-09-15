@@ -7,7 +7,14 @@
  */
 
 import type { ClockRow } from './schema'
-import { type BreakKind, decide, FIRST_KIND, freshTally, type Tally } from './vote'
+import {
+	type BreakKind,
+	decide,
+	FIRST_KIND,
+	freshTally,
+	type Tally,
+	type Vote,
+} from './vote'
 
 export type Phase = 'work' | 'break'
 
@@ -100,7 +107,7 @@ const advanced = (clock: Clock, ms: number) =>
  * returned to a break, because it keeps the kind it already had. Either way the
  * phase decides the call, and this is the only place that rule is written.
  */
-function enterPhase(clock: Clock, votes: BreakKind[] | null): Clock {
+function enterPhase(clock: Clock, votes: Vote[] | null): Clock {
 	const voted = clock.phase === 'break' && votes ? decide(votes, clock.tally) : null
 	const settled = voted ? { ...clock, breakKind: voted.kind, tally: voted.tally } : clock
 	return { ...settled, callOpen: isYapBreak(settled) }
@@ -135,12 +142,7 @@ const at = (
  * The next phase from the top. This phase's playlist keeps the place it
  * reached, and a break that starts this way is put to the vote.
  */
-function nextPhase(
-	clock: Clock,
-	now: number,
-	running: boolean,
-	votes: BreakKind[],
-): Clock {
+function nextPhase(clock: Clock, now: number, running: boolean, votes: Vote[]): Clock {
 	const next = otherPhase(clock.phase)
 	const playlist = advanced(clock, elapsedIn(clock, now))
 	const moved = { ...at(clock, next, clock.durations[next], running, now), playlist }
@@ -154,7 +156,7 @@ function nextPhase(
  * the previous phase and rewinds that playlist with the clock, as pomodance's
  * scrub does. A break come back to this way keeps the kind it already had.
  */
-function nudge(clock: Clock, deltaMs: number, now: number, votes: BreakKind[]): Clock {
+function nudge(clock: Clock, deltaMs: number, now: number, votes: Vote[]): Clock {
 	const duration = clock.durations[clock.phase]
 	const running = clock.endsAt !== null
 	const target = elapsedIn(clock, now) + deltaMs
@@ -173,14 +175,15 @@ function nudge(clock: Clock, deltaMs: number, now: number, votes: BreakKind[]): 
 /**
  * One command applied at `now`. Returns null when the command changes nothing.
  *
- * `votes` holds one break kind for each member who is here, their pick or the
- * default. It only counts when the command ends work and starts a break.
+ * `votes` holds one entry for each member who is here: the kind they picked,
+ * or null for one who picked nothing. It only counts when the command ends
+ * work and starts a break.
  */
 export function apply(
 	clock: Clock,
 	command: Command,
 	now: number,
-	votes: BreakKind[] = [],
+	votes: Vote[] = [],
 ): Clock | null {
 	const running = clock.endsAt !== null
 	switch (command.type) {

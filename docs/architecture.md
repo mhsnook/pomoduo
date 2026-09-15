@@ -56,7 +56,9 @@ Every change runs one at a time.
 client run it. A command is applied with `apply(clock, command, now)`:
 
 - The room applies it when it arrives, and stamps the row with server time and
-  the member who sent it.
+  the member who sent it. Everything that follows from a change — the row, the
+  vote clearing, the call emptying — happens in the room's `settle`, so a new
+  consequence is written once rather than once per command.
 - The device that pressed applies it at the press, so the press shows at once.
 - A rollover chains from the exact end time, so the room and every device
   land on the same next phase without talking to each other.
@@ -85,12 +87,13 @@ and track name the others pull their voice from. A device that has picked the
 call up before joins a break's call by itself; before that it waits for a
 click, because the first mic prompt needs one.
 
-`src/client/session/call.tsx` is one device's end of the call, mounted only
-while that member is on it, so hanging up takes the peer connection and the mic
-with it. partytracks pushes the mic to the SFU and pulls every other member's,
-each into an audio element of its own. Muting swaps a silent track in rather
-than stopping the stream, because the SFU collects a track that has sent
-nothing for thirty seconds.
+`src/client/session/call.tsx` is this device's end of the call: `useCall` holds
+whether you are on it, your mute, and the notices, and the connection inside it
+exists only while you are on the call, so hanging up takes the peer connection
+and the mic with it. partytracks pushes the mic to the SFU and pulls every other
+member's, each into an audio element of its own. Muting swaps a silent track in
+rather than stopping the stream, because the SFU collects a track that has sent
+nothing for thirty seconds. `components/CallPanel.tsx` only draws it.
 
 When the call closes, each device comes off it as its own clock reaches the
 same place, and the room clears `onCall` and `mic` for anyone who did not. A

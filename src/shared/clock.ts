@@ -6,6 +6,7 @@
  * reach the same clock. The rules live in tree/rules.md under "The clock".
  */
 
+import type { ClockRow } from './schema'
 import { type BreakKind, decide, DEFAULT_KIND, freshTally, type Tally } from './vote'
 
 export type Phase = 'work' | 'break'
@@ -73,27 +74,32 @@ export const freshClock = (durations: Durations = DEFAULT_DURATIONS): Clock => (
 	callOpen: true,
 })
 
+/** The break where people talk: no music, and the call is open. */
+export const isYapBreak = (clock: Clock) =>
+	clock.phase === 'break' && clock.breakKind === 'yap'
+
 /** Whether the current phase has music: while it runs, unless it is a yap break. */
-export const musicPlays = (clock: Clock) =>
-	clock.endsAt !== null && !(clock.phase === 'break' && clock.breakKind === 'yap')
+export const musicPlays = (clock: Clock) => clock.endsAt !== null && !isYapBreak(clock)
 
 /**
  * The playlists with the current phase's moved on by `ms`. A yap break plays
  * no music, so its playlist stays where it was.
  */
 const advanced = (clock: Clock, ms: number) =>
-	clock.phase === 'break' && clock.breakKind === 'yap'
+	isYapBreak(clock)
 		? clock.playlist
 		: { ...clock.playlist, [clock.phase]: clock.playlist[clock.phase] + ms }
 
-/** Entering a phase settles the call: a yap break opens it, anything else closes it. */
-const callOn = (phase: Phase, breakKind: BreakKind) =>
-	phase === 'break' && breakKind === 'yap'
-
-/** Work is over: the vote decides what kind of break this is. */
-function enterBreak(clock: Clock, votes: BreakKind[]): Clock {
-	const { kind, tally } = decide(votes, clock.tally)
-	return { ...clock, breakKind: kind, tally }
+/**
+ * A phase just entered. A break started fresh is put to the vote, which decides
+ * its kind; `votes` is null for a break a jump back returned to, which keeps the
+ * kind it had. Either way the phase settles the call, and this is the only place
+ * that rule is written.
+ */
+function entered(clock: Clock, votes: BreakKind[] | null): Clock {
+	const voted = clock.phase === 'break' && votes ? decide(votes, clock.tally) : null
+	const settled = voted ? { ...clock, breakKind: voted.kind, tally: voted.tally } : clock
+	return { ...settled, callOpen: isYapBreak(settled) }
 }
 
 /** What is left on the clock, whether it runs or not. */
@@ -134,8 +140,7 @@ function nextPhase(
 	const next = otherPhase(clock.phase)
 	const playlist = advanced(clock, elapsedIn(clock, now))
 	const moved = { ...at(clock, next, clock.durations[next], running, now), playlist }
-	const entered = next === 'break' ? enterBreak(moved, votes) : moved
-	return { ...entered, callOpen: callOn(entered.phase, entered.breakKind) }
+	return entered(moved, votes)
 }
 
 /**
@@ -158,11 +163,7 @@ function nudge(clock: Clock, deltaMs: number, now: number, votes: BreakKind[]): 
 	const prevDuration = clock.durations[prev]
 	const under = Math.min(-target, prevDuration)
 	const playlist = { ...clock.playlist, [prev]: clock.playlist[prev] - prevDuration }
-	return {
-		...at(clock, prev, under, running, now),
-		playlist,
-		callOpen: callOn(prev, clock.breakKind),
-	}
+	return entered({ ...at(clock, prev, under, running, now), playlist }, null)
 }
 
 /**
@@ -229,8 +230,7 @@ export function apply(
 				endsAt: clock.endsAt + clock.durations[next],
 				playlist: advanced(clock, clock.durations[clock.phase]),
 			}
-			const entered = next === 'break' ? enterBreak(moved, votes) : moved
-			return { ...entered, callOpen: callOn(entered.phase, entered.breakKind) }
+			return entered(moved, votes)
 		}
 	}
 }
@@ -243,6 +243,18 @@ export const startsBreak = (before: Clock, after: Clock, command: Command) =>
 	before.phase === 'work' &&
 	after.phase === 'break' &&
 	!(command.type === 'nudge' && command.deltaMs < 0)
+
+/** The clock a row carries, without the record of the change that made it. */
+export const clockOf = (row: ClockRow): Clock => ({
+	phase: row.phase,
+	endsAt: row.endsAt,
+	remainingMs: row.remainingMs,
+	durations: row.durations,
+	playlist: row.playlist,
+	breakKind: row.breakKind,
+	tally: row.tally,
+	callOpen: row.callOpen,
+})
 
 /** What a command asks of a device's video. */
 export type VideoEffect = {

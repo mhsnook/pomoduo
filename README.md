@@ -16,6 +16,12 @@ pnpm check    # format, lint, types, and unit tests; the pre-commit hook runs th
 pnpm deploy   # build and deploy the Worker
 ```
 
+## Browsers
+
+Built and tested for desktop Chromium. Safari, iOS, and mobile are out of
+scope — see [Browsers](tree/architecture.md#browsers) for why, and for what to
+look at first if that changes.
+
 ## The call
 
 Voice needs a Cloudflare Realtime app. Make an

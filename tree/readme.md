@@ -101,6 +101,8 @@ the product; the pair is.
 - [User-owned tables](architecture.md#user-owned-tables-in-party-db): one
   general room, an owner column, party-db filters per socket. Cookbook 05,
   built.
+- [Browsers](architecture.md#browsers): desktop Chromium is what we build and
+  test for. Safari and iOS are out of scope, and nothing in the app checks.
 
 ## Open questions
 
@@ -113,16 +115,15 @@ prose is made; what is left closes by building. See
 2. [User-owned tables, built](prototypes.md#open-user-owned-tables-built),
    in the party-db repo, and independent of 1
 3. [A yap break end to end](prototypes.md#open-a-yap-break-end-to-end). The
-   voice half is built and waits on a Cloudflare Realtime app; chat is not.
+   voice half is built and waits on two people hearing it; chat is not built.
 
 ## Not yet specified
 
 - Friends: how two people become friends, and whether a friend list is a real
   thing or "anyone you have a link for".
-- Ringing when the friend is not on the page: notifications, mobile, PWA.
-  Web Push from the DO is the only route, and on iOS only for Home Screen
-  web apps, which also lose the mic in the background. This one has a real
-  tension in it.
+- Ringing when the friend is not on the page: Web Push from the Durable
+  Object, for a friend whose tab is closed. The tension this used to carry
+  was iOS's, so what is left is ordinary work.
 - Friends list in the general room, once user-owned tables can also be
   shared rows.
 - Whose playlist plays in a dance break, and whether settings sync at all.
@@ -136,5 +137,6 @@ prose is made; what is left closes by building. See
 ## Out of scope
 
 - Camera video. Voice only.
+- Safari, iOS, and mobile. See [Browsers](architecture.md#browsers).
 - Migrating pomodance localStorage data into pomoduo.
 - The emju.in marketing site. Pomodance stays where it is.

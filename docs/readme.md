@@ -40,6 +40,11 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   intention, a review, and a history of past days. A pomo's length is the time
   the clock actually ran, without the pauses. The ledger lives on the device.
 
+## Where it runs
+
+Desktop Chromium browsers: Chrome, Edge, Arc, Brave. Nothing stops you opening
+it elsewhere, and most of it will work, but the call is only tested here.
+
 ## Not yet
 
 Chat, the knock that opens voice mid-work, ringing a friend who is not on the

@@ -17,6 +17,21 @@ The pomodance timer, pomo, and ledger model is the starting point and gets
 lifted, not rewritten. Its `-lib.ts` layout came from living inside another
 site's router and does not carry over.
 
+## Browsers
+
+Chromium browsers on a desktop are what pomoduo is built and tested for.
+Safari and iOS are out of scope: their WebRTC and background-audio behaviour
+is its own body of work, and a pomodoro timer for two friends does not earn
+it yet. Nothing in the app checks which browser it is in — a check would have
+to sniff the user agent, since Safari has every feature the call asks for, and
+a wrong guess would lock out a browser that works. So the rule is a rule about
+where we spend effort, not a gate: other browsers are welcome to work, and we
+do not chase them when they do not.
+
+This is reversible. If Safari matters later, the two known places to start
+are the mic that keeps a muted track alive, which partytracks drives from an
+AudioContext, and remote audio in a backgrounded tab.
+
 ## Identity
 
 Cloudflare Access for now, the way Emdash uses it for identity:
@@ -85,8 +100,8 @@ fires, which partytracks handles. Peer-to-peer mesh is the fallback if the
 SFU disappoints, and Daily if shipping speed wins.
 
 Ringing someone who is not on the page is a browser problem shared by every
-option (Web Push from the DO, iOS only for Home Screen web apps), so it did
-not pick the transport. It stays in the fog.
+option (Web Push from the DO), so it did not pick the transport. It stays in
+the fog.
 
 Built on 2026-09-15, and one thing came out differently. The DO holds the
 signalling, as this said: who is on the call and where each member's mic is are

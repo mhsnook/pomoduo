@@ -163,8 +163,7 @@ Tests: [Voice](rules.md#voice), [Chat](rules.md#chat),
 [The break vote](rules.md#the-break-vote-and-its-decay), and
 [Voice transport](architecture.md#voice-transport).
 
-Question: does the moment at the end of a break land, and does the SFU mute
-trick hold up on a phone?
+Question: does the moment at the end of a break land?
 
 The voice half was built on 2026-09-15, up to the point where it needs a real
 Cloudflare Realtime app, which is Em's to make. Chat is not built. What the
@@ -187,9 +186,17 @@ build settled:
   watches the peer connection instead, and says so when the mic has not got
   through.
 
-Checked in local dev with two headless Chrome profiles: a yap break opened the
-call on both, each saw the other pick up, and work closed it and cleared both
-mics. Without a Realtime app the SFU cannot be reached, so real audio between
-two people is still untried, and so are the phone questions above.
+This question used to ask a second thing: whether the SFU mute trick holds up
+on a phone. partytracks keeps a muted track alive by pushing an inaudible
+oscillator, which comes from an AudioContext, and iOS suspends an AudioContext
+in a backgrounded tab — so a mute that outlasted the SFU's thirty second
+collector was the sharp risk. [Browsers](architecture.md#browsers) put Safari
+and iOS out of scope on 2026-09-15, and that half of the question went with
+them.
 
-Blocked by: a Cloudflare Realtime app on Em's account. See the README.
+Checked in local dev with two headless Chrome profiles: a yap break opened the
+call on both, each saw the other pick up, the count ran 3, 2, 1 in step with
+the clock face, and work closed the call and cleared both mics. The Realtime
+app exists as of 2026-09-15, but nobody has heard audio come out of this yet.
+
+Blocked by: nothing. What is left is two people and a yap break.

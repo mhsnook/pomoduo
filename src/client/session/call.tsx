@@ -242,7 +242,6 @@ function RemoteMic({ partyTracks, mic }: { partyTracks: PartyTracks; mic: Mic })
 		}
 	}, [track$])
 
-	// an element, not an AudioContext: iOS suspends a context in a background tab
 	return <audio ref={element} autoPlay />
 }
 

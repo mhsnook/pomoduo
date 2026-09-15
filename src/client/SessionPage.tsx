@@ -645,8 +645,20 @@ function Session({
 
 					<div
 						data-testid="timer-controls"
-						className="pomo-controls flex flex-col items-center gap-4 pt-3 pb-10"
+						className="pomo-controls flex flex-col items-center gap-4 pt-4 pb-8"
 					>
+						{!isBreak && (
+							<div className="w-full max-w-xl">
+								<IntentionInput
+									testId="intention-input"
+									label={`Intention for this pomo${enterStarts ? (idle ? ' — enter to start' : ' — enter to resume') : ''}`}
+									value={intention}
+									onChange={updateIntention}
+									onEnter={enterStarts ? () => press({ type: 'start' }) : undefined}
+									placeholder="what are you going to do?"
+								/>
+							</div>
+						)}
 						<div className="flex items-center justify-center gap-4">
 							<Clock clock={clock} serverNow={connection.serverNow} isBreak={isBreak} />
 							<div className="flex flex-col gap-2">
@@ -729,16 +741,6 @@ function Session({
 						<p data-testid="last-change" className="font-ui min-h-5 text-xs opacity-60">
 							{lastChange ? describe(lastChange) : ''}
 						</p>
-						<div className="w-full max-w-xl">
-							<IntentionInput
-								testId="intention-input"
-								label={`Intention for this pomo${enterStarts ? (idle ? ' — enter to start' : ' — enter to resume') : ''}`}
-								value={intention}
-								onChange={updateIntention}
-								onEnter={enterStarts ? () => press({ type: 'start' }) : undefined}
-								placeholder="what are you going to do?"
-							/>
-						</div>
 					</div>
 
 					{showMusicBlocked && (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { IntentionInput } from './components/ui'
 import { SessionPage } from './SessionPage'
 
 /** A session lives at /s/<id>. The address is the invite. */
@@ -9,6 +10,9 @@ const newSessionId = () => crypto.randomUUID().replaceAll('-', '').slice(0, 10)
 
 export function App() {
 	const [path, setPath] = useState(location.pathname)
+	const [intention, setIntention] = useState('')
+	/** The session this visit opened, and the intention it opened with. */
+	const [opened, setOpened] = useState<{ id: string; intention: string } | null>(null)
 
 	useEffect(() => {
 		const onPop = () => setPath(location.pathname)
@@ -17,10 +21,19 @@ export function App() {
 	}, [])
 
 	const sessionId = sessionIdOf(path)
-	if (sessionId) return <SessionPage key={sessionId} sessionId={sessionId} />
+	if (sessionId)
+		return (
+			<SessionPage
+				key={sessionId}
+				sessionId={sessionId}
+				startWith={opened?.id === sessionId ? opened.intention : undefined}
+			/>
+		)
 
 	const start = () => {
-		const next = `/s/${newSessionId()}`
+		const id = newSessionId()
+		setOpened({ id, intention: intention.trim() })
+		const next = `/s/${id}`
 		history.pushState(null, '', next)
 		setPath(next)
 	}
@@ -32,20 +45,32 @@ export function App() {
 		>
 			<h1 className="font-display text-5xl">🍅 pomoduo</h1>
 			<p className="font-ui max-w-md opacity-80">
-				A pomodoro timer for coworking with a friend. Start a session, send your friend
-				the link, and work to the same clock. Then dance on the break.
+				Make a tiny playlist for chill work music, and then have a dance break! 🪩💃 Use
+				it alone or invite a friend.
 			</p>
-			<button
-				type="button"
-				data-testid="start-session"
-				onClick={start}
-				className="btn btn-primary btn-lg"
+			<form
+				className="flex w-full max-w-xl flex-col gap-4"
+				onSubmit={(event) => {
+					event.preventDefault()
+					start()
+				}}
 			>
-				Start a session
-			</button>
-			<p className="font-ui text-xs opacity-60">
-				Works alone too. Keep the link to come back to it.
-			</p>
+				<IntentionInput
+					testId="intention-input"
+					autoFocus
+					label="What are you working on?"
+					value={intention}
+					onChange={setIntention}
+					placeholder="one line about what you'll do"
+				/>
+				<button
+					type="submit"
+					data-testid="start-session"
+					className="btn btn-primary btn-lg"
+				>
+					Start working
+				</button>
+			</form>
 		</main>
 	)
 }

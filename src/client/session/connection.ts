@@ -22,7 +22,7 @@ import {
 	type Track,
 	trackSchema,
 } from '../../shared/schema'
-import { type BreakKind, DEFAULT_KIND } from '../../shared/vote'
+import type { Vote } from '../../shared/vote'
 import { displayName } from '../lib/format'
 import { memberId } from '../lib/member'
 import { firstSync, resync, type ServerTime, serverNowOf } from '../lib/server-time'
@@ -243,9 +243,9 @@ export class SessionConnection {
 	}
 
 	/** Tell the session this member's name and what they are working on. */
-	/** One vote for each member who is here, as the room will count them. */
-	private votes(): BreakKind[] {
-		return this.state.members.filter((m) => m.here).map((m) => m.vote ?? DEFAULT_KIND)
+	/** One entry for each member who is here, as the room will count them. */
+	private votes(): Vote[] {
+		return this.state.members.filter((m) => m.here).map((m) => m.vote)
 	}
 
 	/** Tell the room something about this member, and don't wait to hear back. */
@@ -258,7 +258,7 @@ export class SessionConnection {
 	}
 
 	/** Pick a kind of break for the end of this pomo, or take the pick back with null. */
-	vote(kind: BreakKind | null) {
+	vote(kind: Vote) {
 		this.tell('vote', { vote: kind })
 	}
 

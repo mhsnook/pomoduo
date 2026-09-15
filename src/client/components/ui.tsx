@@ -53,6 +53,7 @@ export function SettingInput({
 	type = 'text',
 	placeholder,
 	className,
+	autoFocus,
 }: {
 	testId: string
 	label: string
@@ -62,6 +63,7 @@ export function SettingInput({
 	type?: 'text' | 'number' | 'date' | 'datetime-local'
 	placeholder?: string
 	className?: string
+	autoFocus?: boolean
 }) {
 	return (
 		<label className={cn('font-ui flex flex-col gap-1 text-sm', className)}>
@@ -70,12 +72,52 @@ export function SettingInput({
 				id={testId}
 				data-testid={testId}
 				type={type}
+				autoFocus={autoFocus}
 				min={type === 'number' ? 1 : undefined}
 				value={value}
 				placeholder={placeholder}
 				onChange={(e) => onChange(e.target.value)}
 				onKeyDown={(e) => e.key === 'Enter' && onEnter?.()}
 				className="input w-full"
+			/>
+		</label>
+	)
+}
+
+/**
+ * The one line you are working on. Big, in both places it appears, so a glance
+ * from across the desk is enough to remember what you sat down to do.
+ */
+export function IntentionInput({
+	testId,
+	label,
+	value,
+	onChange,
+	onEnter,
+	placeholder,
+	autoFocus,
+}: {
+	testId: string
+	label: string
+	value: string
+	onChange: (v: string) => void
+	onEnter?: () => void
+	placeholder?: string
+	autoFocus?: boolean
+}) {
+	return (
+		<label className="font-ui flex w-full flex-col items-center gap-2">
+			<span className="text-sm opacity-70">{label}</span>
+			<input
+				id={testId}
+				data-testid={testId}
+				type="text"
+				autoFocus={autoFocus}
+				value={value}
+				placeholder={placeholder}
+				onChange={(e) => onChange(e.target.value)}
+				onKeyDown={(e) => e.key === 'Enter' && onEnter?.()}
+				className="pomo-intention"
 			/>
 		</label>
 	)

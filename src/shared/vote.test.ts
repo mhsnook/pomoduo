@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { type BreakKind, decide, freshTally, type Tally } from './vote'
+import { type BreakKind, decide, freshTally, type Tally, type Vote } from './vote'
 
 /** The kinds that win when the same votes are cast at the end of every pomo. */
-function run(votes: BreakKind[], pomos: number) {
+function run(votes: Vote[], pomos: number) {
 	let tally: Tally = freshTally()
 	const kinds: BreakKind[] = []
 	for (let i = 0; i < pomos; i++) {
@@ -56,5 +56,37 @@ describe('the break vote', () => {
 
 	it('goes to dance when nobody has voted and nothing is banked', () => {
 		expect(decide([], freshTally()).kind).toBe('dance')
+	})
+})
+
+describe('saying nothing', () => {
+	it('is not a vote, so one pick decides it', () => {
+		expect(decide(['dance', null], freshTally()).kind).toBe('dance')
+		expect(decide(['yap', null], freshTally()).kind).toBe('yap')
+	})
+
+	it('banks nothing, because nothing was cast', () => {
+		expect(decide(['dance', null], freshTally()).tally.bank).toEqual({
+			dance: 0,
+			yap: 0,
+		})
+	})
+
+	it('leaves a room that says nothing with the kind that suits its size', () => {
+		expect(decide([null], freshTally()).kind).toBe('dance')
+		expect(decide([null, null], freshTally()).kind).toBe('yap')
+	})
+
+	it('does not take turns, because a quiet room is not a tie', () => {
+		expect(run([null, null], 4)).toEqual(['yap', 'yap', 'yap', 'yap'])
+	})
+
+	it('still lets a banked side through a quiet room', () => {
+		const banked: Tally = { bank: { dance: 2, yap: 0 }, lastLoser: 'dance' }
+		expect(decide([null, null], banked).kind).toBe('dance')
+	})
+
+	it('does not stop the people who did vote from taking turns', () => {
+		expect(run(['dance', 'yap', null], 4)).toEqual(['dance', 'yap', 'dance', 'yap'])
 	})
 })

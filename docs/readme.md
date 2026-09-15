@@ -10,21 +10,30 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
 
 ## What works today
 
-- **Sessions.** "Start a session" makes a session at `/s/<id>`. The address is
-  the invite: anyone with the link joins the same session. A session works
-  alone too. A session everyone has left ends after a full work phase plus a
-  break, and the next visit starts at the top of work.
+- **Sessions.** The front page asks what you are working on. Whatever you write
+  there becomes your intention, and the clock starts running in a session at
+  `/s/<id>`. The address is the invite: anyone with the link joins the same
+  session. A session works alone too. A session everyone has left ends after a
+  full work phase plus a break, and the next visit starts at the top of work.
 - **Who is here.** Every member shows at the top of the side column, above the
   ledger, with their name, their intention, and whether they are here or away.
-  Hiding the ledger leaves the members in place.
+  Hiding the ledger leaves the members in place. A name is something your
+  friend reads, so the app asks for one the first time someone else turns up,
+  and not before.
 - **One shared clock.** Start, pause, jump a minute either way, make a phase a
   minute longer or shorter, start over, and skip. Any member can press
   anything, and everyone sees it, with a line under the clock saying who did
-  it. Pausing or playing the video counts as pressing pause or start.
+  it. Pausing or playing the video counts as pressing pause or start. The
+  intention sits above the clock, and the three of them stay at the top of the
+  page as it scrolls, so a glance finds them all. A break puts the intention
+  away: the pomo it belonged to is filed in the ledger by then.
 - **The break vote.** Under the members list, each member picks dance or yap
-  for the break this pomo ends in. Not picking counts as dance. The losing
-  kind banks its votes for next time, so a 50-50 duo takes turns and a lone
-  holdout gets their way now and then. Picks clear when the break starts.
+  for the break this pomo ends in. Saying nothing is not a vote: it cancels
+  nobody else's pick and banks nothing, so one pick in a quiet room carries it.
+  A room that picks nothing at all gets a yap when someone else is here, and a
+  dance when you are alone. The losing kind banks its votes for next time, so a
+  50-50 duo takes turns and a lone holdout gets their way now and then. Picks
+  clear when the break starts.
 - **Yap breaks** play no music and have no dance floor. The call opens instead,
   and it cuts when work starts again. Every mic your browser has already allowed
   goes on with it; the first time, you pick up and the browser asks. Your mute is

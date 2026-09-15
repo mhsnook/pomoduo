@@ -29,6 +29,7 @@ import { PhaseVideo } from './components/PhaseVideo'
 import { EditPomoDialog, ReviewDialog } from './components/PomoDialogs'
 import {
 	clampMinutes,
+	IntentionInput,
 	Modal,
 	SettingInput,
 	Toggle,
@@ -121,8 +122,58 @@ function describe(change: Pick<ClockRow, 'actor' | 'command' | 'deltaMs'>) {
 	}
 }
 
+/**
+ * Asked for once a friend turns up, so they see a name rather than "someone".
+ * The draft stays in here until Done: a name saved letter by letter would close
+ * the dialog on the first one.
+ */
+function NameDialog({
+	onSave,
+	onDismiss,
+}: {
+	onSave: (name: string) => void
+	onDismiss: () => void
+}) {
+	const [name, setName] = useState('')
+	return (
+		<Modal testId="name-dialog" onDismiss={onDismiss}>
+			<h2 className="font-display text-2xl">What should your friend see you as?</h2>
+			<p className="text-sm opacity-75">
+				Your name shows next to the changes you make to the clock.
+			</p>
+			<form
+				className="flex flex-col gap-4"
+				onSubmit={(e) => {
+					e.preventDefault()
+					onSave(name)
+				}}
+			>
+				<SettingInput
+					testId="name-input"
+					autoFocus
+					label="Your name"
+					value={name}
+					onChange={(v) => setName(v.slice(0, 40))}
+				/>
+				<div className="modal-action">
+					<button type="submit" data-testid="name-done" className="btn btn-primary">
+						Done
+					</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}
+
 /** Opens the connection to one session, and closes it when the page leaves. */
-export function SessionPage({ sessionId }: { sessionId: string }) {
+export function SessionPage({
+	sessionId,
+	startWith,
+}: {
+	sessionId: string
+	/** The intention this visit arrived with from the front page. It starts the clock. */
+	startWith?: string
+}) {
 	const [settings, setSettings] = useState<Settings>(loadSettings)
 	const [connection, setConnection] = useState<SessionConnection | null>(null)
 	// the connection asks for the name each time it sends, so it always sends the latest
@@ -149,6 +200,7 @@ export function SessionPage({ sessionId }: { sessionId: string }) {
 			connection={connection}
 			settings={settings}
 			updateSettings={updateSettings}
+			startWith={startWith}
 		/>
 	)
 }
@@ -157,10 +209,12 @@ function Session({
 	connection,
 	settings,
 	updateSettings,
+	startWith,
 }: {
 	connection: SessionConnection
 	settings: Settings
 	updateSettings: (patch: Partial<Settings>) => void
+	startWith?: string
 }) {
 	const { status, clock, lastChange, members } = useSyncExternalStore(
 		connection.subscribe,
@@ -176,8 +230,8 @@ function Session({
 	const [pomos, setPomos] = useState(readPomos)
 	const [day, setDay] = useState(() => resolveDay(loadDay(), pomos, Date.now()))
 	// the saved intention belongs to the saved day; a new day starts blank
-	const [intention, setIntention] = useState(() =>
-		day === loadDay() ? loadIntention() : '',
+	const [intention, setIntention] = useState(
+		() => startWith || (day === loadDay() ? loadIntention() : ''),
 	)
 	const current = pomos.find((p) => p.end === null) ?? null
 
@@ -195,8 +249,17 @@ function Session({
 	const [editing, setEditing] = useState<Pomo | null>(null)
 	const [askRollover, setAskRollover] = useState(false)
 	const [showSettings, setShowSettings] = useState(false)
-	const [askName, setAskName] = useState(!settings.name)
+	const [nameAsked, setNameAsked] = useState(false)
 	const [copied, setCopied] = useState(false)
+
+	// A name is for your friend to read, so we ask for one once a friend is here
+	// and not before. Settings holds the same field, so a name cleared in there
+	// does not count as needing one.
+	const askName =
+		!settings.name &&
+		!nameAsked &&
+		!showSettings &&
+		members.some((m) => m.here && m.id !== connection.memberId)
 
 	const [tracks, setTracks] = useState<
 		Record<Phase, { index: number; startMs: number; loadKey: number }>
@@ -242,6 +305,7 @@ function Session({
 	// unless the clock is still in the work phase it belongs to; bring the worked
 	// time up to date; and open a pomo if the clock is already running work.
 	const joined = useRef(false)
+	const [ledgerReady, setLedgerReady] = useState(false)
 	const onLive = useEffectEvent(() => {
 		const now = Date.now()
 		const inWork = clock.phase === 'work' && !isFresh(clock)
@@ -261,7 +325,18 @@ function Session({
 		if (status !== 'live' || joined.current) return
 		joined.current = true
 		onLive()
+		setLedgerReady(true)
 	}, [status])
+
+	// Arriving from the front page starts the pomo. It waits for the catch-up
+	// above to land: pressing start in the same commit would open the pomo
+	// against the ledger as it stood before, and miss it.
+	const toStart = useRef(startWith !== undefined)
+	useEffect(() => {
+		if (!ledgerReady || !toStart.current) return
+		toStart.current = false
+		if (connection.getState().clock.endsAt === null) connection.press({ type: 'start' })
+	}, [ledgerReady, connection])
 
 	// The ledger and the video react to the clock, whoever moved it.
 	const patchPomo = (id: string, patch: Partial<Pomo>) =>
@@ -520,7 +595,7 @@ function Session({
 			)}
 		>
 			<div className="grid flex-1 gap-6 p-6 lg:grid-cols-[1fr_20rem]">
-				<div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+				<div className="pomo-column mx-auto flex w-full max-w-4xl flex-col gap-6">
 					<header className="flex items-start justify-between gap-4">
 						<div className="flex flex-col gap-1">
 							<h1 className="font-display text-3xl">
@@ -571,8 +646,20 @@ function Session({
 
 					<div
 						data-testid="timer-controls"
-						className="pomo-controls flex flex-col items-center gap-4 pt-3 pb-8"
+						className="pomo-controls flex flex-col items-center gap-4 pt-4 pb-8"
 					>
+						{!isBreak && (
+							<div className="w-full max-w-xl">
+								<IntentionInput
+									testId="intention-input"
+									label={`Intention for this pomo${enterStarts ? (idle ? ' — enter to start' : ' — enter to resume') : ''}`}
+									value={intention}
+									onChange={updateIntention}
+									onEnter={enterStarts ? () => press({ type: 'start' }) : undefined}
+									placeholder="what are you going to do?"
+								/>
+							</div>
+						)}
 						<div className="flex items-center justify-center gap-4">
 							<Clock clock={clock} serverNow={connection.serverNow} isBreak={isBreak} />
 							<div className="flex flex-col gap-2">
@@ -657,16 +744,6 @@ function Session({
 						</p>
 					</div>
 
-					<SettingInput
-						testId="intention-input"
-						className="mx-auto w-full max-w-xl"
-						label={`Intention for this pomo${enterStarts ? (idle ? ' — enter to start' : ' — enter to resume') : ''}`}
-						value={intention}
-						onChange={updateIntention}
-						onEnter={enterStarts ? () => press({ type: 'start' }) : undefined}
-						placeholder="what are you going to do?"
-					/>
-
 					{showMusicBlocked && (
 						<div
 							data-testid="music-blocked"
@@ -709,7 +786,7 @@ function Session({
 					</section>
 				</div>
 
-				<aside className="flex flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
+				<aside className="flex min-w-0 flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
 					<Members members={members} you={connection.memberId} />
 					{status === 'live' && (
 						<CallPanel
@@ -738,31 +815,13 @@ function Session({
 			</footer>
 
 			{askName && (
-				<Modal testId="name-dialog" onDismiss={() => setAskName(false)}>
-					<h2 className="font-display text-2xl">What should your friend see you as?</h2>
-					<p className="text-sm opacity-75">
-						Your name shows next to the changes you make to the clock.
-					</p>
-					<form
-						className="flex flex-col gap-4"
-						onSubmit={(e) => {
-							e.preventDefault()
-							setAskName(false)
-						}}
-					>
-						<SettingInput
-							testId="name-input"
-							label="Your name"
-							value={settings.name}
-							onChange={(v) => updateSettings({ name: v.slice(0, 40) })}
-						/>
-						<div className="modal-action">
-							<button type="submit" data-testid="name-done" className="btn btn-primary">
-								Done
-							</button>
-						</div>
-					</form>
-				</Modal>
+				<NameDialog
+					onSave={(name) => {
+						updateSettings({ name })
+						setNameAsked(true)
+					}}
+					onDismiss={() => setNameAsked(true)}
+				/>
 			)}
 
 			{showSettings && (

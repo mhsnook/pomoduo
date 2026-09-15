@@ -66,8 +66,9 @@ the product; the pair is.
 - [The knock](rules.md#opening-voice-mid-pomo-the-knock): mid-work voice
   starts with a quiet knock the other side accepts or ignores.
 - [The break vote](rules.md#the-break-vote-and-its-bank): one vote each,
-  not picking counts as dance; the losing kind banks its votes, so everyone
-  gets their way eventually. Replaced the decay-factor weights.
+  silence is not a vote, and a room that votes for nothing gets yap in company
+  and dance alone; the losing kind banks its votes, so everyone gets their way
+  eventually. Replaced the decay-factor weights.
 - [Chat](rules.md#chat): live in any break and whenever the call is open;
   held otherwise, editable until it delivers.
 - [Ledger in a duo](user-stories.md#ledger-in-a-duo): pomos stay personal.

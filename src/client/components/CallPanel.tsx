@@ -53,10 +53,39 @@ export function CallPanel({
 					type="button"
 					data-testid="pick-up"
 					onClick={call.pickUp}
+					disabled={call.asking}
 					className="btn btn-primary"
 				>
-					<Phone className="size-4" /> Pick up
+					<Phone className="size-4" /> {call.asking ? 'Asking for the mic…' : 'Pick up'}
 				</button>
+			)}
+
+			{!call.onCall && call.permission !== 'granted' && (
+				<div data-testid="mic-ask" className="flex flex-col gap-1">
+					{call.permission === 'denied' ? (
+						<p className="text-xs opacity-70">
+							This browser is keeping the mic from the page. Let it through in the site
+							settings beside the address bar, then reload.
+						</p>
+					) : (
+						<>
+							<button
+								type="button"
+								data-testid="allow-mic"
+								onClick={call.ask}
+								disabled={call.asking}
+								className="btn btn-outline btn-sm"
+							>
+								<Mic className="size-4" />
+								{call.asking ? 'Asking…' : 'Allow the mic'}
+							</button>
+							<p className="text-xs opacity-70">
+								Breaks open the call, so say yes to the mic now and it will be ready when
+								one starts.
+							</p>
+						</>
+					)}
+				</div>
 			)}
 
 			{call.onCall && (

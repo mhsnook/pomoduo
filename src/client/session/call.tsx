@@ -13,6 +13,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { Clock } from '../../shared/clock'
 import { type Member, type Mic, VOICE_PREFIX } from '../../shared/schema'
+import { askForMic, type MicPermission, micFailure } from '../lib/mic'
 import { secondsOf } from '../lib/server-time'
 
 /** Describes what this device tells the room about where it sits on the call. */
@@ -40,6 +41,12 @@ export type CallState = {
 	notice: string
 	/** Seconds until the call cuts, once there are few enough to count down. */
 	countdown: number | null
+	/** What the browser has said about this page using the mic. */
+	permission: MicPermission
+	/** Whether an ask for the mic is out, here or in front of the person. */
+	asking: boolean
+	/** Asks the browser for the mic now, so a break's call opens with one ready. */
+	ask: () => void
 	pickUp: () => void
 	hangUp: () => void
 	toggleMute: () => void
@@ -48,13 +55,12 @@ export type CallState = {
 }
 
 /**
-/**
  * Holds this device's side of the session's call, and keeps the connection open
  * while this member is on it. Three things decide whether your mic is live, and
  * they do not move each other:
  *
  * - The browser has given the page the mic, or it has not. That is the
- *   browser's to remember, and the call never changes it.
+ *   browser's to remember; the page only asks, and the answer outlives the call.
  * - You are muted, or you are not. That is yours, and it carries from one call
  *   to the next until you change it.
  * - The call is open, or it is closed. That is the clock's, and it turns on
@@ -77,8 +83,9 @@ export function useCall({
 	onVoice: (state: VoiceState) => void
 }): CallState {
 	const { callOpen } = clock
-	const allowed = useMicAllowed()
+	const permission = useMicPermission()
 	const [muted, setMuted] = useState(false)
+	const [asking, setAsking] = useState(false)
 	const [answered, setAnswered] = useState(false)
 	const [hungUp, setHungUp] = useState(false)
 	const [notice, setNotice] = useState('')
@@ -101,7 +108,7 @@ export function useCall({
 	// A break's call opens every mic the browser has already allowed. The call a
 	// session opens before work starts is an invitation and waits for a click, so
 	// nobody's mic goes live while they are working.
-	const joinsOnItsOwn = allowed && clock.phase === 'break'
+	const joinsOnItsOwn = permission === 'granted' && clock.phase === 'break'
 	const onCall = callOpen && !hungUp && (answered || joinsOnItsOwn)
 
 	const waiting = onCall && !live
@@ -113,6 +120,19 @@ export function useCall({
 
 	const seconds = useSecondsLeft(clock, serverNow, onCall)
 
+	// partytracks chooses its input from the devices the browser will name, and a
+	// browser names none until the page has been allowed a mic once. So the ask
+	// goes through getUserMedia here, and the call is mounted only once it lands.
+	const ask = (then?: () => void) => {
+		setNotice('')
+		setAsking(true)
+		void askForMic().then((error) => {
+			setAsking(false)
+			if (error) setNotice(micFailure(error))
+			else then?.()
+		})
+	}
+
 	return {
 		open: callOpen,
 		onCall,
@@ -120,12 +140,16 @@ export function useCall({
 		waiting,
 		notice: notice || (waiting && slow ? NO_MIC : ''),
 		countdown: seconds !== null && seconds > 0 && seconds <= COUNT_FROM ? seconds : null,
+		permission,
+		asking,
+		ask: () => ask(),
 		pickUp: () => {
 			setNotice('')
 			setSlow(false)
 			setLive(false)
 			setHungUp(false)
-			setAnswered(true)
+			if (permission === 'granted') setAnswered(true)
+			else ask(() => setAnswered(true))
 		},
 		hangUp: () => setHungUp(true),
 		toggleMute: () => setMuted((m) => !m),
@@ -138,11 +162,7 @@ export function useCall({
 				onLive={setLive}
 				onMicFailed={(error) => {
 					setHungUp(true)
-					setNotice(
-						error.name === 'NotAllowedError'
-							? 'Your browser did not let the page use the mic, so you are not on the call.'
-							: `The mic did not start: ${error.message}`,
-					)
+					setNotice(micFailure(error))
 				}}
 			/>
 		) : null,
@@ -150,15 +170,15 @@ export function useCall({
 }
 
 /**
- * Reports whether the browser has already given this page the mic, and follows
- * that answer as it changes. Asking never prompts, so a break's call can open a
- * mic that is allowed and leave one that is not to the pick-up button.
+ * Reports what the browser has said about this page using the mic, and follows
+ * that answer as it changes. Reading it never prompts, so a break's call can
+ * open a mic that is allowed and leave the asking to a button.
  */
-function useMicAllowed() {
-	const [allowed, setAllowed] = useState(false)
+function useMicPermission(): MicPermission {
+	const [permission, setPermission] = useState<MicPermission>('unknown')
 	useEffect(() => {
 		let status: PermissionStatus | undefined
-		const read = () => setAllowed(status?.state === 'granted')
+		const read = () => setPermission(status?.state ?? 'unknown')
 		navigator.permissions
 			// 'microphone' is a real permission name that the DOM types leave out
 			.query({ name: 'microphone' as PermissionName })
@@ -167,10 +187,10 @@ function useMicAllowed() {
 				status.addEventListener('change', read)
 				read()
 			})
-			.catch(() => setAllowed(false))
+			.catch(() => setPermission('unknown'))
 		return () => status?.removeEventListener('change', read)
 	}, [])
-	return allowed
+	return permission
 }
 
 /**

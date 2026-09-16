@@ -85,6 +85,13 @@ where the SFU carries their mic for the others to pull.
 `src/client/session/call.tsx` holds the connection and says what those three
 mean together.
 
+The mic permission is the browser's, not the session's. `src/client/lib/mic.ts`
+asks for it and names what comes back. The page asks through `getUserMedia`
+itself rather than leaving it to partytracks, because partytracks picks its
+input from `enumerateDevices()`, which names nothing a browser has not been
+allowed: with no device to try it raises `DevicesExhaustedError` without ever
+prompting. So the ask comes first, and the call is mounted after it lands.
+
 When the call closes, each device comes off it as its own clock reaches the
 same place, and the room clears the call columns for anyone who did not. A
 member who leaves the session comes off the call with them.

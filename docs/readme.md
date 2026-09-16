@@ -36,8 +36,10 @@ questions live in [`tree/`](../tree/readme.md), and the vocabulary lives in
   clear when the break starts.
 - **Yap breaks** play no music and have no dance floor. The call opens instead,
   and it cuts when work starts again. Every mic your browser has already allowed
-  goes on with it; the first time, you pick up and the browser asks. Your mute is
-  yours and stays where you left it, and hanging up takes you off that one call.
+  goes on with it. Until yours is, the call panel offers the mic to your browser
+  while you work, so a break opens with one ready; picking up asks too, if you
+  never did. Your mute is yours and stays where you left it, and hanging up
+  takes you off that one call.
   The call needs a Cloudflare Realtime app on the server; without one the page
   says so rather than pretending.
 - **The phase lengths** belong to the session. Changing them in Settings

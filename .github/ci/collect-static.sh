@@ -49,15 +49,19 @@ EXCLUDE='^(dist/|\.wrangler/|prototypes/|\.github/ci/|worker-configuration\.d\.t
 # Read-only checks run concurrently. The typechecker is the long pole and the
 # linter finishes underneath it, so this is close to free.
 (
-	# `tsc --build` over four project references. Keep the grep: it drops the
-	# `$ tsc --build` banner and pnpm's `[ELIFECYCLE]` line, which carry the exit
-	# code and would diff as noise.
+	# The TOOL, not the `typecheck` package script. The base tree is the base
+	# branch, and on the pull request that first adds or renames a script, the
+	# base tree does not have it. Every command here is `pnpm exec <tool>` for
+	# that reason; the scripts stay in package.json for humans.
+	#
+	# `tsc --build` walks the four project references. Keep the grep: it drops
+	# anything that is not a diagnostic, which would otherwise diff as noise.
 	#
 	# `sort -u`, not plain `sort`: `src/shared` is included by both
 	# `tsconfig.client.json` and `tsconfig.worker.json`, so every error in shared
 	# code is printed once per project. Identical file, line, column and message
 	# is one error, and counting it twice would double every shared-code delta.
-	pnpm typecheck 2>&1 | grep ': error TS' | sort -u >"$OUT/typecheck.txt"
+	pnpm exec tsc --build 2>&1 | grep ': error TS' | sort -u >"$OUT/typecheck.txt"
 	status=${PIPESTATUS[0]}
 
 	# A typechecker that failed but printed nothing the grep recognises would

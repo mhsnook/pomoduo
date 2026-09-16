@@ -1,0 +1,246 @@
+# One job per TREE, not one per check: `head` and `base` each install once and
+# build once, then run every check that tree can answer. `report` fans in,
+# diffs the two, posts a single comment, and owns the pass/fail decision.
+
+name: PR checks
+
+# Do not add a `push` trigger to this workflow. It compares two trees, and a
+# push has no base to compare against — it would run both jobs and report
+# nothing. A post-merge build belongs in its own workflow.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  # A cancelled run leaves its sticky comment describing an older commit, with
+  # no red X to explain why. Let every PR run finish.
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # GitHub's default is `bash -e {0}`, with no `pipefail`, so a piped step's
+    # exit status is the LAST command's. Four steps here pipe, and each would
+    # otherwise report success on a failure it swallowed. `shell: bash` gets
+    # `-eo pipefail`.
+    shell: bash
+
+jobs:
+  head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # The formatter gate is scoped to the files this PR touches, so the head
+      # tree has to say which those are. Pure git, so it runs before the
+      # toolchain — and `Static checks` depends on its outcome, because an
+      # empty `touched.txt` reads as a PR that touched nothing and would let
+      # the formatter gate pass in silence.
+      #
+      # Two-dot diff, because the default checkout for `pull_request` is the
+      # MERGE ref — base already merged in — so base.sha..HEAD is exactly this
+      # PR's own changes. If you change the checkout to `ref:
+      # github.event.pull_request.head.sha`, switch this to the three-dot form,
+      # or you will pick up every file that landed on base since the branch
+      # diverged.
+      - name: List files this PR touches
+        id: touched
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir -p /tmp/out/static
+          git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null ||
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git diff --name-only --diff-filter=d "$BASE_SHA" HEAD |
+            sort >/tmp/out/static/touched.txt
+          wc -l /tmp/out/static/touched.txt
+
+      # pnpm/action-setup MUST come before setup-node: setup-node's `cache:
+      # pnpm` needs the pnpm binary to locate the store.
+      #
+      # No `version:` here. The action reads the `packageManager` field in
+      # package.json, so the version lives in one place. Pinning it here as well
+      # is the single most common way this workflow breaks.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'pnpm'
+
+      # Also runs `postinstall: wrangler types`, which writes
+      # `worker-configuration.d.ts`. The worker tsconfig includes that file.
+      - name: Install
+        id: install
+        run: pnpm install --frozen-lockfile
+
+      # Before the build and never dependent on it: a branch that fails to
+      # build is the branch that most needs to hear about its type errors.
+      - name: Static checks
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.touched.outcome == 'success' }}
+        run: bash .github/ci/collect-static.sh /tmp/out/static
+
+      # `continue-on-error`: a failed build is a finding to report, not a
+      # reason to lose the comment.
+      - name: Build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/out
+          pnpm build 2>&1 | tee /tmp/out/build.log
+
+      - name: Record the build outcome
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p /tmp/out
+          echo "${{ steps.build.outcome }}" >/tmp/out/build.outcome
+
+      - name: Measure bundle
+        if: ${{ steps.build.outcome == 'success' }}
+        run: node .github/ci/measure-bundle.cjs dist /tmp/out/bundle.json
+
+      # Rendered in `report`, off the artifact, like every other check.
+      - name: Tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm test --reporter=json --outputFile=/tmp/out/test-results.json
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: tree-head
+          path: /tmp/out/
+          retention-days: 1
+
+  base:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.base_ref }}
+
+      # Both trees must be measured by the same check scripts and the same tool
+      # configs, or a PR that edits a script or turns on a lint rule shows up as
+      # a change in the codebase.
+      #
+      # Head lands in `.ci-head/` rather than over the base tree, so the scripts
+      # are not themselves part of what this job measures. `.ci-head/` is
+      # gitignored, which is what keeps the linter and the formatter out of it.
+      # Cone-mode sparse checkout always includes the repository root, so this
+      # brings every root config with it — nothing to keep in sync by hand.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: .ci-head
+          sparse-checkout: .github/ci
+
+      # The tool configs decide what COUNTS as an issue, so both trees read
+      # head's copies. They have to sit at the tree root: `tsc --build` resolves
+      # project references relatively, and both oxc tools resolve config from
+      # cwd. `vite.config.ts` and `wrangler.jsonc` are deliberately NOT copied —
+      # a build-config change is a real change the bundle delta should show.
+      #
+      # `.gitignore` is one of them: oxlint and oxfmt both read it to decide
+      # what to scan, and head's is the copy that ignores `.ci-head/`. Without
+      # it this job walks into the checkout it just made and reports head's
+      # files as the base branch's.
+      - name: Take head's tool configs
+        run: |
+          cp .ci-head/.gitignore .ci-head/.oxlintrc.json .ci-head/.oxfmtrc.json \
+            .ci-head/tsconfig*.json .
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: .ci-head/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .ci-head/.nvmrc
+          cache: 'pnpm'
+
+      - name: Install
+        id: install
+        run: pnpm install --frozen-lockfile
+
+      - name: Static checks
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash .ci-head/.github/ci/collect-static.sh /tmp/out/static
+
+      # No `tee` here: `render-build.cjs` quotes head's log in both failure
+      # branches, so a base log would be uploaded and downloaded unread.
+      - name: Build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm build
+
+      - name: Record the build outcome
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p /tmp/out
+          echo "${{ steps.build.outcome }}" >/tmp/out/build.outcome
+
+      - name: Measure bundle
+        if: ${{ steps.build.outcome == 'success' }}
+        run: node .ci-head/.github/ci/measure-bundle.cjs dist /tmp/out/bundle.json
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: tree-base
+          path: /tmp/out/
+          retention-days: 1
+
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [head, base]
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with: { name: tree-head, path: /tmp/head }
+        continue-on-error: true
+      - uses: actions/download-artifact@v8
+        with: { name: tree-base, path: /tmp/base }
+        continue-on-error: true
+
+      # Every fragment is rendered here, off the artifacts. Neither tree is
+      # present, and every renderer writes a sidecar on every path — including
+      # the ones that report "I could not measure this", which is what lets the
+      # gate tell a crashed job apart from a clean one.
+      - name: Render fragments
+        run: |
+          node -e "require('./.github/ci/render-build.cjs')({
+            head: '/tmp/head', base: '/tmp/base', out: '/tmp/fragments'
+          })"
+          node -e "require('./.github/ci/render-static.cjs')({
+            head: '/tmp/head/static', base: '/tmp/base/static', out: '/tmp/fragments'
+          })"
+          node -e "require('./.github/ci/render-bundle.cjs')({
+            head: '/tmp/head/bundle.json', base: '/tmp/base/bundle.json', out: '/tmp/fragments'
+          })"
+          node -e "require('./.github/ci/render-tests.cjs')({
+            results: '/tmp/head/test-results.json', out: '/tmp/fragments'
+          })"
+
+      - name: Post comment
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { assemble, upsertComment } = require('./.github/ci/comment.cjs')
+            const body = assemble('/tmp/fragments', {
+              id: 'pr-checks',
+              title: '### PR checks',
+              header: `_Compared against \`${context.payload.pull_request.base.ref}\`._`,
+            })
+            core.info(JSON.stringify(await upsertComment(github, context, 'pr-checks', body)))
+
+      # `tee` puts the verdict on the run's summary page, so the reason a
+      # required check went red is visible without opening the log.
+      - name: Gate
+        run: node .github/ci/gate.cjs /tmp/fragments | tee -a "$GITHUB_STEP_SUMMARY"

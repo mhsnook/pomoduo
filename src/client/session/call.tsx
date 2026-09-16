@@ -35,8 +35,10 @@ export type CallState = {
 	/** Whether this device is on it. */
 	onCall: boolean
 	muted: boolean
-	/** On the call, but this device's mic has not got through yet. */
+	/** On the call, but this device's side of it has not come up yet. */
 	waiting: boolean
+	/** On the call with no mic going out: this device can hear, and cannot speak. */
+	listening: boolean
 	/** Something the person needs told, or an empty string. */
 	notice: string
 	/** Seconds until the call cuts, once there are few enough to count down. */
@@ -68,6 +70,9 @@ export type CallState = {
  *
  * Hanging up is the fourth, and the only one that belongs to a single call: it
  * takes you off this one, and the next one starts without it.
+ *
+ * A mic that never arrives is not a fifth: hearing the others needs no mic of
+ * your own, so the call joins anyway and sends nothing.
  */
 export function useCall({
 	clock,
@@ -90,6 +95,7 @@ export function useCall({
 	const [hungUp, setHungUp] = useState(false)
 	const [notice, setNotice] = useState('')
 	const [live, setLive] = useState(false)
+	const [listening, setListening] = useState(false)
 	const [slow, setSlow] = useState(false)
 	const [wasOpen, setWasOpen] = useState(callOpen)
 
@@ -102,6 +108,7 @@ export function useCall({
 		setHungUp(false)
 		setNotice('')
 		setLive(false)
+		setListening(false)
 		setSlow(false)
 	}
 
@@ -121,15 +128,18 @@ export function useCall({
 	const seconds = useSecondsLeft(clock, serverNow, onCall)
 
 	// partytracks chooses its input from the devices the browser will name, and a
-	// browser names none until the page has been allowed a mic once. So the ask
-	// goes through getUserMedia here, and the call is mounted only once it lands.
-	const ask = (then?: () => void) => {
+	// browser names none until the page has been allowed a mic once, so the ask
+	// goes through getUserMedia here before the call is mounted. `join` says
+	// whether this ask is on the way onto the call: one that is joins either way,
+	// listening when no mic came, because the others are audible without one.
+	const ask = (join: boolean) => {
 		setNotice('')
 		setAsking(true)
 		void askForMic().then((error) => {
 			setAsking(false)
+			setListening(error !== null)
 			if (error) setNotice(micFailure(error))
-			else then?.()
+			if (join) setAnswered(true)
 		})
 	}
 
@@ -138,18 +148,21 @@ export function useCall({
 		onCall,
 		muted,
 		waiting,
+		listening: onCall && listening,
 		notice: notice || (waiting && slow ? NO_MIC : ''),
 		countdown: seconds !== null && seconds > 0 && seconds <= COUNT_FROM ? seconds : null,
 		permission,
 		asking,
-		ask: () => ask(),
+		ask: () => ask(false),
 		pickUp: () => {
 			setNotice('')
 			setSlow(false)
 			setLive(false)
 			setHungUp(false)
-			if (permission === 'granted') setAnswered(true)
-			else ask(() => setAnswered(true))
+			if (permission === 'granted') {
+				setListening(false)
+				setAnswered(true)
+			} else ask(true)
 		},
 		hangUp: () => setHungUp(true),
 		toggleMute: () => setMuted((m) => !m),
@@ -158,10 +171,11 @@ export function useCall({
 				members={members}
 				you={you}
 				muted={muted}
+				listening={listening}
 				onVoice={onVoice}
 				onLive={setLive}
 				onMicFailed={(error) => {
-					setHungUp(true)
+					setListening(true)
 					setNotice(micFailure(error))
 				}}
 			/>
@@ -194,19 +208,19 @@ function useMicPermission(): MicPermission {
 }
 
 /**
- * Pushes this device's mic up to the Cloudflare Realtime SFU and pulls every
- * other member's back down. React mounts this only while the member is on the
- * call, so hanging up takes the peer connection and the mic with it.
+ * Holds this device's peer connection to the Cloudflare Realtime SFU: its mic
+ * pushed up, and every other member's pulled down. React mounts this only while
+ * the member is on the call, so hanging up takes the connection with it.
  *
- * Muting keeps the track flowing with silence rather than stopping it, because
- * the SFU collects a track that has sent nothing for 30 seconds. That is what
- * partytracks' broadcastTrack$ does, so mute goes through it and never through
- * the mic's own source.
+ * Listening needs none of the push half. Pulling the others is a connection in
+ * one direction, so a member with no mic joins with `listening` and hears
+ * everyone; the room is told their mic is null, and nobody tries to pull it.
  */
 function Call({
 	members,
 	you,
 	muted,
+	listening,
 	onVoice,
 	onLive,
 	onMicFailed,
@@ -214,11 +228,74 @@ function Call({
 	members: Member[]
 	you: string
 	muted: boolean
+	listening: boolean
 	onVoice: (state: VoiceState) => void
 	onLive: (live: boolean) => void
 	onMicFailed: (error: Error) => void
 }) {
 	const partyTracks = useMemo(() => new PartyTracks({ prefix: VOICE_PREFIX }), [])
+	const [mine, setMine] = useState<Mic | null>(null)
+
+	// The others cannot pull a mic they cannot find, so the room hears about it
+	// the moment the SFU names it, and again each time the connection is remade.
+	useEffect(() => {
+		onVoice({
+			onCall: true,
+			muted: listening ? false : muted,
+			mic: listening ? null : mine,
+		})
+	}, [listening, muted, mine, onVoice])
+
+	useEffect(() => () => onVoice({ onCall: false, muted: false, mic: null }), [onVoice])
+
+	// A call that cannot reach the SFU looks exactly like one that can, because
+	// partytracks retries quietly and its sessionError$ never fires. What the peer
+	// connection says, and whether the SFU has named our track, is the truth. A
+	// listener has no track to be named, so the peer connection is the whole of it.
+	const peerState = useObservableAsValue(partyTracks.peerConnectionState$, 'new')
+	const live = peerState === 'connected' && (listening || mine !== null)
+	useEffect(() => {
+		onLive(live)
+	}, [live, onLive])
+
+	return (
+		<>
+			{!listening && (
+				<MyMic
+					partyTracks={partyTracks}
+					muted={muted}
+					onMic={setMine}
+					onFailed={onMicFailed}
+				/>
+			)}
+			{members.map((member) =>
+				member.id !== you && member.here && member.onCall && member.mic ? (
+					<RemoteMic key={member.id} partyTracks={partyTracks} mic={member.mic} />
+				) : null,
+			)}
+		</>
+	)
+}
+
+/**
+ * Pushes this device's mic up to the SFU and reports where it landed.
+ *
+ * Muting keeps the track flowing with silence rather than stopping it, because
+ * the SFU collects a track that has sent nothing for 30 seconds. That is what
+ * partytracks' broadcastTrack$ does, so mute goes through it and never through
+ * the mic's own source.
+ */
+function MyMic({
+	partyTracks,
+	muted,
+	onMic,
+	onFailed,
+}: {
+	partyTracks: PartyTracks
+	muted: boolean
+	onMic: (mic: Mic | null) => void
+	onFailed: (error: Error) => void
+}) {
 	const mic = useMemo(
 		() =>
 			getMic({
@@ -230,7 +307,7 @@ function Call({
 			}),
 		[],
 	)
-	useObservable(mic.error$, onMicFailed)
+	useObservable(mic.error$, onFailed)
 
 	useEffect(() => {
 		if (muted) mic.stopBroadcasting()
@@ -244,38 +321,15 @@ function Call({
 	const metadata = useObservableAsValue(metadata$)
 	const { sessionId, trackName } = metadata ?? {}
 
-	// The others cannot pull a mic they cannot find, so the room hears about it
-	// the moment the SFU names it, and again each time the connection is remade.
 	// Keyed on the names rather than the object: push() re-emits an equal one
 	// every time the broadcast track is swapped, which every mute toggle does.
 	useEffect(() => {
-		onVoice({
-			onCall: true,
-			muted,
-			mic: sessionId && trackName ? { sessionId, trackName } : null,
-		})
-	}, [sessionId, trackName, muted, onVoice])
+		onMic(sessionId && trackName ? { sessionId, trackName } : null)
+	}, [sessionId, trackName, onMic])
 
-	useEffect(() => () => onVoice({ onCall: false, muted: false, mic: null }), [onVoice])
+	useEffect(() => () => onMic(null), [onMic])
 
-	// A call that cannot reach the SFU looks exactly like one that can, because
-	// partytracks retries quietly and its sessionError$ never fires. What the peer
-	// connection says, and whether the SFU has named our track, is the truth.
-	const peerState = useObservableAsValue(partyTracks.peerConnectionState$, 'new')
-	const live = peerState === 'connected' && metadata !== undefined
-	useEffect(() => {
-		onLive(live)
-	}, [live, onLive])
-
-	return (
-		<>
-			{members.map((member) =>
-				member.id !== you && member.here && member.onCall && member.mic ? (
-					<RemoteMic key={member.id} partyTracks={partyTracks} mic={member.mic} />
-				) : null,
-			)}
-		</>
-	)
+	return null
 }
 
 /** Plays one other member's mic, pulled from the SFU into an element of its own. */

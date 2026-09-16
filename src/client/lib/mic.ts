@@ -17,7 +17,9 @@ export async function askForMic(): Promise<Error | null> {
 }
 
 /**
- * Says what went wrong with the mic, in a sentence. partytracks raises
+ * Says what went wrong with the mic, in a sentence. It says nothing about the
+ * call: hearing the others needs no mic, so a failure here never decides
+ * whether you are on it. partytracks raises
  * `DevicesExhaustedError` with no message of its own, so every case that
  * reaches a person is named here rather than passed through.
  */
@@ -25,13 +27,13 @@ export function micFailure(error: Pick<Error, 'name' | 'message'>): string {
 	switch (error.name) {
 		case 'NotAllowedError':
 		case 'SecurityError':
-			return 'Your browser did not let the page use the mic, so you are not on the call.'
+			return 'Your browser is not letting the page use the mic.'
 		case 'DevicesExhaustedError':
 		case 'NotFoundError':
 		case 'OverconstrainedError':
 			return 'No mic reached the page. Check that one is plugged in, and that this browser and this machine let the page have it.'
 		case 'NotReadableError':
-			return 'Something else on this machine is holding the mic, so the call could not have it.'
+			return 'Something else on this machine is holding the mic.'
 		default:
 			return error.message
 				? `The mic did not start: ${error.message}`

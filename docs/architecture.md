@@ -72,8 +72,7 @@ A yap break plays no music, so its playlist does not move on.
 
 ## The call
 
-The call is one thing the session shares and three things each member decides,
-and the split is what makes it worth writing down here.
+The call is one thing the session shares and three things each member decides.
 
 The session's part is `callOpen`, a column of the clock row, so `apply` settles
 it along with the phase and every device reaches the same answer at the same
@@ -81,16 +80,9 @@ moment. `src/shared/clock.ts` says when it opens and closes.
 
 A member's part is three columns of their `members` row, written through
 `POST .../voice`: whether they have picked up, whether they are muted, and
-where the SFU carries their mic for the others to pull.
-`src/client/session/call.tsx` holds the connection and says what those three
-mean together.
-
-The mic permission is the browser's, not the session's. `src/client/lib/mic.ts`
-asks for it and names what comes back. The page asks through `getUserMedia`
-itself rather than leaving it to partytracks, because partytracks picks its
-input from `enumerateDevices()`, which names nothing a browser has not been
-allowed: with no device to try it raises `DevicesExhaustedError` without ever
-prompting. So the ask comes first, and the call is mounted after it lands.
+where the SFU carries their mic for the others to pull, or null when there is
+nothing to pull. `src/client/session/call.tsx` holds the connection and says
+what those three mean together.
 
 When the call closes, each device comes off it as its own clock reaches the
 same place, and the room clears the call columns for anyone who did not. A
@@ -115,9 +107,8 @@ member who leaves the session comes off the call with them.
   new playlist at the clock's place for it, mapped onto tracks through the
   lengths in `tracks` (`src/client/lib/playlist.ts`). Nothing corrects a video
   between changes.
-- **Clicks on the video** are commands. The page remembers what it last told
-  each player, and a player's own pause or play counts as a click only when it
-  goes against that, and not within 800 ms of it.
+- **Clicks on the video** are commands: a player's own pause or play becomes a
+  `pause` or `start` for the whole session.
 - **Its own rollover.** The device flips the phase when its own timer reaches
   zero, without waiting for the room.
 

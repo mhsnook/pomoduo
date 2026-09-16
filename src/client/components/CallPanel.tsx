@@ -11,7 +11,12 @@ const listNames = (members: Member[]) =>
 /** Says what the call is doing, in a sentence. */
 function stateLine(call: CallState, alsoOn: Member[]) {
 	if (!call.open) return 'The call is closed. A yap break opens it.'
-	if (call.waiting) return 'Getting your mic on the call…'
+	if (call.waiting)
+		return call.listening ? 'Joining the call…' : 'Getting your mic on the call…'
+	if (call.listening)
+		return alsoOn.length > 0
+			? `You’re listening in to ${listNames(alsoOn)}. Nothing of yours is going out.`
+			: 'You’re listening in. Nothing of yours is going out, and nobody else has picked up.'
 	if (call.onCall)
 		return alsoOn.length > 0
 			? `You’re on the call with ${listNames(alsoOn)}.`
@@ -60,7 +65,7 @@ export function CallPanel({
 				</button>
 			)}
 
-			{!call.onCall && call.permission !== 'granted' && (
+			{(!call.onCall || call.listening) && call.permission !== 'granted' && (
 				<div data-testid="mic-ask" className="flex flex-col gap-1">
 					{call.permission === 'denied' ? (
 						<p className="text-xs opacity-70">
@@ -80,8 +85,9 @@ export function CallPanel({
 								{call.asking ? 'Asking…' : 'Allow the mic'}
 							</button>
 							<p className="text-xs opacity-70">
-								Breaks open the call, so say yes to the mic now and it will be ready when
-								one starts.
+								{call.listening
+									? 'Say yes and your mic joins the call too.'
+									: 'Breaks open the call, so say yes to the mic now and it will be ready when one starts.'}
 							</p>
 						</>
 					)}
@@ -90,19 +96,21 @@ export function CallPanel({
 
 			{call.onCall && (
 				<div className="join w-full">
-					<button
-						type="button"
-						data-testid="mute-button"
-						aria-pressed={call.muted}
-						onClick={call.toggleMute}
-						className={cn(
-							'btn join-item flex-1',
-							call.muted ? 'btn-primary' : 'btn-outline',
-						)}
-					>
-						{call.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-						{call.muted ? 'Muted' : 'Mute'}
-					</button>
+					{!call.listening && (
+						<button
+							type="button"
+							data-testid="mute-button"
+							aria-pressed={call.muted}
+							onClick={call.toggleMute}
+							className={cn(
+								'btn join-item flex-1',
+								call.muted ? 'btn-primary' : 'btn-outline',
+							)}
+						>
+							{call.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+							{call.muted ? 'Muted' : 'Mute'}
+						</button>
+					)}
 					<button
 						type="button"
 						data-testid="hang-up"

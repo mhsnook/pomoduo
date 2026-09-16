@@ -141,8 +141,15 @@ jobs:
       # project references relatively, and both oxc tools resolve config from
       # cwd. `vite.config.ts` and `wrangler.jsonc` are deliberately NOT copied —
       # a build-config change is a real change the bundle delta should show.
+      #
+      # `.gitignore` is one of them: oxlint and oxfmt both read it to decide
+      # what to scan, and head's is the copy that ignores `.ci-head/`. Without
+      # it this job walks into the checkout it just made and reports head's
+      # files as the base branch's.
       - name: Take head's tool configs
-        run: cp .ci-head/.oxlintrc.json .ci-head/.oxfmtrc.json .ci-head/tsconfig*.json .
+        run: |
+          cp .ci-head/.gitignore .ci-head/.oxlintrc.json .ci-head/.oxfmtrc.json \
+            .ci-head/tsconfig*.json .
 
       - uses: pnpm/action-setup@v6
         with:

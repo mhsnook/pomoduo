@@ -39,8 +39,8 @@ its own endpoints.
 | `POST .../track`   | Records a video's length, if nobody has yet               |
 
 **Presence.** A device's member id rides on its socket as the `pomoduo-member`
-cookie. The room marks a member here when one of their sockets opens, and
-away when the last one closes. Ids are per device for now.
+cookie. The room marks a member here when one of their sockets opens, away
+when the last one closes, and forgets them when the session ends.
 
 **One alarm, two jobs.** The room sets its alarm for the earlier of the end of
 a running phase and the end of an empty session. When a phase ends, it flips
@@ -68,7 +68,6 @@ or a rollover ends work, `apply` takes one vote per member who is here and
 decides the break's kind from the votes and the banks in the clock row. The
 room counts the members it has marked here; a device predicting the same
 change counts the members it has. The room clears every pick after the vote.
-A yap break plays no music, so its playlist does not move on.
 
 ## The call
 
@@ -114,7 +113,6 @@ member who leaves the session comes off the call with them.
 
 ## On the device only
 
-`localStorage`, under `pomoduo:`: the ledger of pomos with the time each one
-ran, the current intention and work day, settings (playlists, name, ledger and
-motion toggles), this device's member id, and whether it has ever picked the
-call up.
+The session room holds nothing personal. A member's ledger, their settings and
+their id live in `localStorage` under `pomoduo:`, so they belong to one browser
+and reach no other device.

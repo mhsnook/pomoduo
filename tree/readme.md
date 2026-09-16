@@ -117,6 +117,9 @@ prose is made; what is left closes by building. See
    in the party-db repo, and independent of 1
 3. [A yap break end to end](prototypes.md#open-a-yap-break-end-to-end). The
    voice half is built and waits on two people hearing it; chat is not built.
+4. [Going back to solo](user-stories.md#open-going-back-to-solo): when someone
+   who left stops being listed, and whether you can leave a session without
+   ending your pomo.
 
 ## Not yet specified
 

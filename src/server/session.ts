@@ -308,9 +308,10 @@ export class Session extends PartyDbServer<Env> {
 
 	/**
 	 * Writes one clock change and does what that change calls for: it clears the
-	 * votes when a break starts, and takes everyone off the call when the call
-	 * closes. Every command that changes the clock calls this, so a new
-	 * consequence goes here rather than into each command.
+	 * votes when a break starts, takes everyone off the call when the call
+	 * closes, and forgets the members when the session ends. Every command that
+	 * changes the clock calls this, so a new consequence goes here rather than
+	 * into each command.
 	 */
 	private async settle(
 		before: Clock,
@@ -328,6 +329,7 @@ export class Session extends PartyDbServer<Env> {
 			await this.patchMembers('vote IS NOT NULL', { vote: null })
 		if (before.callOpen && !next.callOpen)
 			await this.patchMembers('onCall = 1', { onCall: false, mic: null })
+		if (change.command.type === 'end') await this.forgetMembers()
 		return row
 	}
 
@@ -383,6 +385,25 @@ export class Session extends PartyDbServer<Env> {
 					type: 'update',
 					value: { ...member, ...patch },
 				})),
+			},
+		])
+	}
+
+	/**
+	 * Empties the members table. The session this roster belonged to is over, so
+	 * the next person through the same address arrives alone rather than to a
+	 * list of people who left hours ago.
+	 */
+	private async forgetMembers() {
+		const found = this.ctx.storage.sql
+			.exec('SELECT * FROM members')
+			.toArray()
+			.map(parseMember)
+		if (found.length === 0) return
+		await this.commit([
+			{
+				channel: 'members',
+				ops: found.map((member) => ({ type: 'delete', value: member })),
 			},
 		])
 	}

@@ -39,14 +39,17 @@ its own endpoints.
 | `POST .../track`   | Records a video's length, if nobody has yet               |
 
 **Presence.** A device's member id rides on its socket as the `pomoduo-member`
-cookie. The room marks a member here when one of their sockets opens, away
-when the last one closes, and forgets them when the session ends.
+cookie. The room marks a member here when one of their sockets opens and away
+when the last one closes. Away holds their place for ten minutes, then they
+come off the roster; ending the session clears it entirely. Someone who comes
+back after either joins again as a new member of the same session.
 
-**One alarm, two jobs.** The room sets its alarm for the earlier of the end of
-a running phase and the end of an empty session. When a phase ends, it flips
-the phase. When the last socket closes, it notes the time; if nobody is back
-a full work phase plus a break later, it ends the session: the clock goes
-back to the top of work, stopped.
+**One alarm, three jobs.** The room sets its alarm for the earliest of the end
+of a running phase, the moment the member who has been away longest comes off
+the roster, and the end of an empty session. When a phase ends, it flips the
+phase. When the last socket closes, it notes the time; if nobody is back a
+full work phase plus a break later, it ends the session: the clock goes back
+to the top of work, stopped.
 
 Every change runs one at a time.
 

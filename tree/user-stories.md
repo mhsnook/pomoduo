@@ -40,30 +40,30 @@ another friend into a running session. The session ends when the last member
 leaves and a grace window passes: one full work phase plus one break, the same
 window pomodance uses to offer a resume.
 
-### Open: Going back to solo
+### Going back to solo
 
 A real day is solo, then shared, then solo again: you start a pomo alone, a
 friend joins for a few, and they go while you carry on. The session they leave
-behind still lists them. A member who closes their tab is marked away, and the
-only thing that ever takes them off the list is the session ending — which
-needs everyone gone for a work phase plus a break, and you are still here. So
-you work the rest of the afternoon beside two greyed-out ghosts.
+behind should not keep listing them.
 
-Two things to decide, and they are not the same thing.
+Away holds a member's place, but not forever. It carries them through a
+reload, a crashed browser, or a break spent away from the desk, and it keeps
+their intention on screen while they are away from it. Ten minutes after their
+last socket closes they come off the roster, and an afternoon carried on alone
+looks like one. Someone who comes back after that joins again, the same as any
+friend arriving mid-pomo.
 
-**When does someone who left stop being listed?** Away is not gone. It holds
-their place through a reload, a dropped connection, or a walk to the kettle,
-and it keeps their intention on screen while they are away from it; that is
-worth having. But it has no end, and it needs one. The lean is a window
-shorter than the one that ends a session: long enough to cover a reload and a
-coffee, short enough that an afternoon alone looks like one. Better built and
-reacted to than argued into a number.
+Ten minutes is a first number, not a settled one: long enough to cover the
+reasons someone disappears for a moment, short enough to be shorter than the
+window that ends an empty session. Change it by living with it.
 
-**Should there be a way to leave the room and keep working?** Hanging up ends
-the call, not the session, and that split is right — you can stop yapping and
-still share a clock. What is missing is the other exit: step out of the shared
-clock, keep your own pomo running, keep your ledger. Today the only way out is
-to close the tab, which abandons the pomo you are in the middle of.
+### Open: Leaving a session without ending your pomo
+
+Hanging up ends the call, not the session, and that split is right — you can
+stop yapping and still share a clock. What is missing is the other exit: step
+out of the shared clock, keep your own pomo running, keep your ledger. Today
+the only way out is to close the tab, which abandons the pomo you are in the
+middle of, and waits ten minutes to take you off your friend's roster.
 
 This is [how a solo pomo becomes a session](readme.md#not-yet-specified) run
 backwards, and it may want the same answer: if a session is a place you can

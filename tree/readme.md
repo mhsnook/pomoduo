@@ -104,6 +104,9 @@ the product; the pair is.
   built.
 - [Browsers](architecture.md#browsers): desktop Chromium is what we build and
   test for. Safari and iOS are out of scope, and nothing in the app checks.
+- [Going back to solo](user-stories.md#going-back-to-solo): away holds a
+  member's place for ten minutes, then they come off the roster, so a session
+  carried on alone looks like one.
 
 ## Open questions
 
@@ -117,9 +120,8 @@ prose is made; what is left closes by building. See
    in the party-db repo, and independent of 1
 3. [A yap break end to end](prototypes.md#open-a-yap-break-end-to-end). The
    voice half is built and waits on two people hearing it; chat is not built.
-4. [Going back to solo](user-stories.md#open-going-back-to-solo): when someone
-   who left stops being listed, and whether you can leave a session without
-   ending your pomo.
+4. [Leaving a session without ending your pomo](user-stories.md#open-leaving-a-session-without-ending-your-pomo),
+   the way out that is not closing the tab.
 
 ## Not yet specified
 

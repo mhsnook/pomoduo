@@ -34,6 +34,13 @@ type SocketState = { memberId: string | null }
 /** Storage key: when the last device left, while nobody has come back. */
 const EMPTY_SINCE = 'emptySince'
 
+/**
+ * How long a member who has gone stays on the roster. Long enough to cover a
+ * reload, a crashed browser, and a break spent away from the desk; short
+ * enough that an afternoon carried on alone looks like one.
+ */
+const GONE_AFTER_MS = 10 * 60_000
+
 /** Parses a member row out of SQLite, where booleans are integers and the mic is JSON. */
 const parseMember = (raw: Record<string, unknown>): Member =>
 	memberSchema.parse({
@@ -216,6 +223,7 @@ export class Session extends PartyDbServer<Env> {
 	async onAlarm() {
 		await this.serially(async () => {
 			await this.rollOver()
+			await this.forgetTheGone()
 			await this.endIfEmpty()
 			await this.schedule()
 		})
@@ -279,12 +287,17 @@ export class Session extends PartyDbServer<Env> {
 		})
 	}
 
-	/** One alarm covers both jobs: the end of a running phase, and the end of an empty session. */
+	/**
+	 * One alarm covers every job the room wakes for: the end of a running phase,
+	 * the moment a member who has gone drops off the roster, and the end of an
+	 * empty session.
+	 */
 	private async schedule() {
 		const clock = this.readClock()?.clock
 		const emptySince = await this.ctx.storage.get<number>(EMPTY_SINCE)
 		const times = [
 			clock?.endsAt ?? null,
+			this.goneAt(),
 			emptySince !== undefined && clock ? emptySince + graceOf(clock) : null,
 		].filter((t): t is number => t !== null)
 		if (times.length === 0) await this.ctx.storage.deleteAlarm()
@@ -309,7 +322,7 @@ export class Session extends PartyDbServer<Env> {
 	/**
 	 * Writes one clock change and does what that change calls for: it clears the
 	 * votes when a break starts, takes everyone off the call when the call
-	 * closes, and forgets the members when the session ends. Every command that
+	 * closes, and clears the roster when the session ends. Every command that
 	 * changes the clock calls this, so a new consequence goes here rather than
 	 * into each command.
 	 */
@@ -329,7 +342,7 @@ export class Session extends PartyDbServer<Env> {
 			await this.patchMembers('vote IS NOT NULL', { vote: null })
 		if (before.callOpen && !next.callOpen)
 			await this.patchMembers('onCall = 1', { onCall: false, mic: null })
-		if (change.command.type === 'end') await this.forgetMembers()
+		if (change.command.type === 'end') await this.dropMembers('1 = 1')
 		return row
 	}
 
@@ -389,14 +402,10 @@ export class Session extends PartyDbServer<Env> {
 		])
 	}
 
-	/**
-	 * Empties the members table. The session this roster belonged to is over, so
-	 * the next person through the same address arrives alone rather than to a
-	 * list of people who left hours ago.
-	 */
-	private async forgetMembers() {
+	/** Takes every member the query finds off the roster, in one commit. */
+	private async dropMembers(where: string, ...binds: (string | number)[]) {
 		const found = this.ctx.storage.sql
-			.exec('SELECT * FROM members')
+			.exec(`SELECT * FROM members WHERE ${where}`, ...binds)
 			.toArray()
 			.map(parseMember)
 		if (found.length === 0) return
@@ -406,6 +415,23 @@ export class Session extends PartyDbServer<Env> {
 				ops: found.map((member) => ({ type: 'delete', value: member })),
 			},
 		])
+	}
+
+	/**
+	 * Takes the long gone off the roster. Away holds a member's place through a
+	 * reload or a walk to the kettle; past `GONE_AFTER_MS` it stops meaning that,
+	 * and a session carried on alone should look like one.
+	 */
+	private async forgetTheGone() {
+		await this.dropMembers('here = 0 AND seenAt <= ?', Date.now() - GONE_AFTER_MS)
+	}
+
+	/** When the member who has been away longest drops off, if anyone is away. */
+	private goneAt(): number | null {
+		const [row] = this.ctx.storage.sql
+			.exec('SELECT MIN(seenAt) AS at FROM members WHERE here = 0')
+			.toArray()
+		return typeof row?.at === 'number' ? row.at + GONE_AFTER_MS : null
 	}
 
 	private readMember(id: string): Member | null {

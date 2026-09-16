@@ -70,8 +70,16 @@ jobs:
       # same shape `collect-static.sh` writes into `format.txt`. The gate
       # intersects the two lists, and a shape mismatch would make that
       # intersection empty on every PR.
+      #
+      # `shell: bash` is load-bearing on every step here that pipes. The
+      # default shell for `run:` is `bash -e {0}`, with no `pipefail`, so the
+      # step's exit status is the LAST command in the pipe. Here that is `sort`,
+      # which succeeds even when `git diff` failed, leaving an empty
+      # `touched.txt` that reads as "this PR touched nothing" and lets the
+      # formatter gate pass. Naming the shell explicitly gets `-eo pipefail`.
       - name: List files this PR touches
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -101,6 +109,10 @@ jobs:
         id: build
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         continue-on-error: true
+        # `shell: bash` for `pipefail`. Without it the step's exit status is
+        # `tee`'s, which is always 0, so `steps.build.outcome` would read
+        # `success` on a broken build and check 0 would never fire.
+        shell: bash
         run: |
           mkdir -p /tmp/out
           pnpm build 2>&1 | tee /tmp/out/build.log
@@ -149,7 +161,44 @@ jobs:
         with:
           ref: ${{ github.base_ref }}
 
+      # This step runs FIRST, before the toolchain is set up, and that ordering
+      # is load-bearing. `setup-node` reads `.nvmrc` from the tree it is given,
+      # which here is the base branch — and the PR that first adds `.nvmrc` has
+      # it only on head. `setup-node` then dies before any later step could
+      # fetch it. The same applies to every file that decides HOW this job runs
+      # or WHAT it measures.
+      #
+      # Both trees must be measured by the same scripts and the same tool
+      # configs, or a PR that edits a script or turns on a lint rule shows up as
+      # a change in the codebase. One `git checkout` per file: a single call
+      # listing all of them fails as a whole when any one path is missing, which
+      # would silently leave the base tree measured by its own older copies.
+      - name: Fetch the measurement from head
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout "$HEAD_SHA" -- .github/ci/
+          for f in .nvmrc .oxlintrc.json .oxfmtrc.json \
+            tsconfig.json tsconfig.client.json tsconfig.worker.json tsconfig.node.json; do
+            git checkout "$HEAD_SHA" -- "$f" ||
+              echo "no $f on head, leaving the base copy in place"
+          done
+          # head's package.json, to a scratch path — NOT over the base tree's
+          # copy, whose dependency list has to keep matching the base lockfile
+          # for `--frozen-lockfile`. pnpm/action-setup reads only the
+          # `packageManager` field, and the PR that first adds that field has it
+          # only on head.
+          git show "$HEAD_SHA:package.json" >.ci-head-package.json
+
+      # pnpm/action-setup MUST come before setup-node: setup-node's `cache:
+      # pnpm` needs the pnpm binary to locate the store.
+      #
+      # No `version:` here either. The version still lives in one field; this
+      # only says which file to read it from.
       - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: .ci-head-package.json
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -159,30 +208,6 @@ jobs:
         id: install
         run: pnpm install --frozen-lockfile
 
-      # The scripts live on the head branch, so fetch them rather than using the
-      # base branch's copy. Both trees must be measured by the SAME scripts, or
-      # a change to a script itself shows up as a change in the codebase.
-      - name: Fetch check scripts from head
-        run: |
-          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.head.sha }}"
-          git checkout "${{ github.event.pull_request.head.sha }}" -- .github/ci/
-
-      # The tool configs are part of the measurement too. If a PR turns on a
-      # lint rule or tightens a compiler option, both trees must be judged by
-      # the new rule, or every file the rule touches reads as newly broken and
-      # the PR cannot merge.
-      #
-      # One `git checkout` per file: a single call listing all of them fails as
-      # a whole when any one path is missing, which would silently leave the
-      # base tree measured by its own older configs.
-      - name: Fetch tool configs from head
-        run: |
-          for f in .oxlintrc.json .oxfmtrc.json \
-            tsconfig.json tsconfig.client.json tsconfig.worker.json tsconfig.node.json; do
-            git checkout "${{ github.event.pull_request.head.sha }}" -- "$f" ||
-              echo "no $f on head, leaving the base copy in place"
-          done
-
       - name: Static checks
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: bash .github/ci/collect-static.sh /tmp/out/static
@@ -191,6 +216,10 @@ jobs:
         id: build
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         continue-on-error: true
+        # `shell: bash` for `pipefail`. Without it the step's exit status is
+        # `tee`'s, which is always 0, so `steps.build.outcome` would read
+        # `success` on a broken build and check 0 would never fire.
+        shell: bash
         run: |
           mkdir -p /tmp/out
           pnpm build 2>&1 | tee /tmp/out/build.log
@@ -259,5 +288,9 @@ jobs:
 
       # `tee` puts the verdict on the run's summary page, so the reason a
       # required check went red is visible without opening the log.
+      #
+      # `shell: bash` for `pipefail`. Without it the step's exit status is
+      # `tee`'s, so the gate prints its verdict and the job goes green anyway.
       - name: Gate
+        shell: bash
         run: node .github/ci/gate.cjs /tmp/fragments | tee -a "$GITHUB_STEP_SUMMARY"

@@ -39,14 +39,17 @@ its own endpoints.
 | `POST .../track`   | Records a video's length, if nobody has yet               |
 
 **Presence.** A device's member id rides on its socket as the `pomoduo-member`
-cookie. The room marks a member here when one of their sockets opens, and
-away when the last one closes. Ids are per device for now.
+cookie. The room marks a member here when one of their sockets opens and away
+when the last one closes. Away holds their place for ten minutes, then they
+come off the roster; ending the session clears it entirely. Someone who comes
+back after either joins again as a new member of the same session.
 
-**One alarm, two jobs.** The room sets its alarm for the earlier of the end of
-a running phase and the end of an empty session. When a phase ends, it flips
-the phase. When the last socket closes, it notes the time; if nobody is back
-a full work phase plus a break later, it ends the session: the clock goes
-back to the top of work, stopped.
+**One alarm, three jobs.** The room sets its alarm for the earliest of the end
+of a running phase, the moment the member who has been away longest comes off
+the roster, and the end of an empty session. When a phase ends, it flips the
+phase. When the last socket closes, it notes the time; if nobody is back a
+full work phase plus a break later, it ends the session: the clock goes back
+to the top of work, stopped.
 
 Every change runs one at a time.
 
@@ -68,22 +71,25 @@ or a rollover ends work, `apply` takes one vote per member who is here and
 decides the break's kind from the votes and the banks in the clock row. The
 room counts the members it has marked here; a device predicting the same
 change counts the members it has. The room clears every pick after the vote.
-A yap break plays no music, so its playlist does not move on.
 
 ## The call
 
-The call is one thing the session shares and three things each member decides,
-and the split is what makes it worth writing down here.
+The call is one thing the session shares and three things each member decides.
 
 The session's part is `callOpen`, a column of the clock row, so `apply` settles
 it along with the phase and every device reaches the same answer at the same
 moment. `src/shared/clock.ts` says when it opens and closes.
 
-A member's part is three columns of their `members` row, written through
-`POST .../voice`: whether they have picked up, whether they are muted, and
-where the SFU carries their mic for the others to pull.
-`src/client/session/call.tsx` holds the connection and says what those three
-mean together.
+A member's part is four columns of their `members` row, written through
+`POST .../voice`: whether they have picked up, whether they are listening with
+no mic of their own, whether they are muted, and where the SFU carries their
+mic for the others to pull. `src/client/session/call.tsx` holds the connection
+and says what those four mean together.
+
+Mute and listening are not the same answer and neither stands in for the other:
+mute is the person's own, and carries from one call to the next; listening is
+the browser's, and says no mic is coming. `mic` is only ever an address to pull
+from, null while a track is still coming up and null for good for a listener.
 
 When the call closes, each device comes off it as its own clock reaches the
 same place, and the room clears the call columns for anyone who did not. A
@@ -108,15 +114,13 @@ member who leaves the session comes off the call with them.
   new playlist at the clock's place for it, mapped onto tracks through the
   lengths in `tracks` (`src/client/lib/playlist.ts`). Nothing corrects a video
   between changes.
-- **Clicks on the video** are commands. The page remembers what it last told
-  each player, and a player's own pause or play counts as a click only when it
-  goes against that, and not within 800 ms of it.
+- **Clicks on the video** are commands: a player's own pause or play becomes a
+  `pause` or `start` for the whole session.
 - **Its own rollover.** The device flips the phase when its own timer reaches
   zero, without waiting for the room.
 
 ## On the device only
 
-`localStorage`, under `pomoduo:`: the ledger of pomos with the time each one
-ran, the current intention and work day, settings (playlists, name, ledger and
-motion toggles), this device's member id, and whether it has ever picked the
-call up.
+The session room holds nothing personal. A member's ledger, their settings and
+their id live in `localStorage` under `pomoduo:`, so they belong to one browser
+and reach no other device.

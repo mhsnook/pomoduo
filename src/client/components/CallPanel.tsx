@@ -3,6 +3,7 @@ import { Mic, MicOff, Phone, PhoneOff } from 'lucide-react'
 import type { Clock } from '../../shared/clock'
 import type { Member } from '../../shared/schema'
 import { cn, displayName } from '../lib/format'
+import { MIC_DENIED } from '../lib/mic'
 import { type CallState, useCall, type VoiceState } from '../session/call'
 
 const listNames = (members: Member[]) =>
@@ -10,15 +11,55 @@ const listNames = (members: Member[]) =>
 
 /** Says what the call is doing, in a sentence. */
 function stateLine(call: CallState, alsoOn: Member[]) {
+	const others = alsoOn.length > 0 ? listNames(alsoOn) : null
 	if (!call.open) return 'The call is closed. A yap break opens it.'
-	if (call.waiting) return 'Getting your mic on the call…'
+	if (call.waiting)
+		return call.listening ? 'Joining the call…' : 'Getting your mic on the call…'
+	if (call.listening)
+		return others
+			? `You’re listening in to ${others}. Nothing of yours is going out.`
+			: 'You’re listening in. Nothing of yours is going out, and nobody else has picked up.'
 	if (call.onCall)
-		return alsoOn.length > 0
-			? `You’re on the call with ${listNames(alsoOn)}.`
+		return others
+			? `You’re on the call with ${others}.`
 			: 'You’re on the call. Nobody else has picked up.'
-	return alsoOn.length > 0
-		? `The call is open, and ${listNames(alsoOn)} ${alsoOn.length > 1 ? 'are' : 'is'} on it.`
+	return others
+		? `The call is open, and ${others} ${alsoOn.length > 1 ? 'are' : 'is'} on it.`
 		: 'The call is open. Pick up whenever you like.'
+}
+
+/**
+ * Offers the mic to the browser, ahead of the call that will want it. Pick up
+ * asks too, so this stays out of the way while that button is there to press.
+ */
+function MicAsk({ call }: { call: CallState }) {
+	if (call.permission === 'granted' || (call.open && !call.listening)) return null
+	// An open call has already said this through the notice, in the same words.
+	if (call.permission === 'denied')
+		return call.open ? null : (
+			<p data-testid="mic-ask" className="text-xs opacity-70">
+				{MIC_DENIED}
+			</p>
+		)
+	return (
+		<div data-testid="mic-ask" className="flex flex-col gap-1">
+			<button
+				type="button"
+				data-testid="allow-mic"
+				onClick={call.ask}
+				disabled={call.asking}
+				className="btn btn-outline btn-sm"
+			>
+				<Mic className="size-4" />
+				{call.asking ? 'Asking…' : 'Allow the mic'}
+			</button>
+			<p className="text-xs opacity-70">
+				{call.listening
+					? 'Say yes and your mic joins the call too.'
+					: 'Breaks open the call, so say yes to the mic now and it will be ready when one starts.'}
+			</p>
+		</div>
+	)
 }
 
 /**
@@ -53,27 +94,32 @@ export function CallPanel({
 					type="button"
 					data-testid="pick-up"
 					onClick={call.pickUp}
+					disabled={call.asking}
 					className="btn btn-primary"
 				>
-					<Phone className="size-4" /> Pick up
+					<Phone className="size-4" /> {call.asking ? 'Asking for the mic…' : 'Pick up'}
 				</button>
 			)}
 
+			<MicAsk call={call} />
+
 			{call.onCall && (
 				<div className="join w-full">
-					<button
-						type="button"
-						data-testid="mute-button"
-						aria-pressed={call.muted}
-						onClick={call.toggleMute}
-						className={cn(
-							'btn join-item flex-1',
-							call.muted ? 'btn-primary' : 'btn-outline',
-						)}
-					>
-						{call.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-						{call.muted ? 'Muted' : 'Mute'}
-					</button>
+					{!call.listening && (
+						<button
+							type="button"
+							data-testid="mute-button"
+							aria-pressed={call.muted}
+							onClick={call.toggleMute}
+							className={cn(
+								'btn join-item flex-1',
+								call.muted ? 'btn-primary' : 'btn-outline',
+							)}
+						>
+							{call.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+							{call.muted ? 'Muted' : 'Mute'}
+						</button>
+					)}
 					<button
 						type="button"
 						data-testid="hang-up"

@@ -40,6 +40,37 @@ another friend into a running session. The session ends when the last member
 leaves and a grace window passes: one full work phase plus one break, the same
 window pomodance uses to offer a resume.
 
+### Going back to solo
+
+A real day is solo, then shared, then solo again: you start a pomo alone, a
+friend joins for a few, and they go while you carry on. The session they leave
+behind should not keep listing them.
+
+Away holds a member's place, but not forever. It carries them through a
+reload, a crashed browser, or a break spent away from the desk, and it keeps
+their intention on screen while they are away from it. Ten minutes after their
+last socket closes they come off the roster, and an afternoon carried on alone
+looks like one. Someone who comes back after that joins again, the same as any
+friend arriving mid-pomo.
+
+Ten minutes is a first number, not a settled one: long enough to cover the
+reasons someone disappears for a moment, short enough to be shorter than the
+window that ends an empty session. Change it by living with it.
+
+### Open: Leaving a session without ending your pomo
+
+Hanging up ends the call, not the session, and that split is right — you can
+stop yapping and still share a clock. What is missing is the other exit: step
+out of the shared clock, keep your own pomo running, keep your ledger. Today
+the only way out is to close the tab, which abandons the pomo you are in the
+middle of, and waits ten minutes to take you off your friend's roster.
+
+This is [how a solo pomo becomes a session](readme.md#not-yet-specified) run
+backwards, and it may want the same answer: if a session is a place you can
+walk into mid-pomo, it should be a place you can walk out of the same way.
+
+Blocked by: nothing.
+
 ### What you see of your friend
 
 For each other member, live: their intention, their mic state (muted or

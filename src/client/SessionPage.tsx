@@ -755,11 +755,11 @@ function Session({
 								onClick={() => tell(phase, 'play')}
 								className="btn btn-outline rounded-full"
 							>
-								▶ Bring the music back
+								▶ Play the music
 							</button>
 							<p className="font-ui text-xs opacity-70">
 								Browsers don’t let a page start audio on its own, so the soundtrack needs
-								one click after a reload.
+								one click to begin.
 							</p>
 						</div>
 					)}

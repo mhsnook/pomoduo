@@ -1,20 +1,19 @@
 'use strict'
 
-// Differential engine for base-vs-head CI reports.
-//
-// Pure functions with no GitHub or network coupling: require() it from an
-// actions/github-script step, or run `node delta.cjs --selftest` locally to
-// check the pairing logic after you edit it.
+// Differential engine for base-vs-head CI reports: pure functions over two
+// lists of tool output, plus the helpers that render them.
 
 const fs = require('fs')
+const path = require('path')
 
 const DEFAULT_PROXIMITY = 10
 
-// ── Parsers ──────────────────────────────────────────────────────────────
+// How many issues to print before collapsing to "… and N more".
+const CAP = 50
+
 // Each parser turns one raw output line into a comparable record. `rest` holds
 // everything that identifies the issue APART from its line number, so a pure
 // line shift can be recognised and discounted.
-
 const parsers = {
 	// tsc: src/foo.ts(12,5): error TS2339: Property 'x' does not exist.
 	tsc: (raw) => {
@@ -24,8 +23,7 @@ const parsers = {
 			: { file: '', line: 0, col: 0, rest: raw, raw }
 	},
 
-	// unix format, emitted by eslint -f unix, oxlint -f unix, ruff, vet,
-	// golangci-lint, and most others: src/foo.ts:12:5: message [rule]
+	// oxlint -f unix: src/foo.ts:12:5: message [rule]
 	unix: (raw) => {
 		const m = raw.match(/^([^:]+):(\d+):(\d+):\s*(.*)$/)
 		return m
@@ -33,12 +31,10 @@ const parsers = {
 			: { file: '', line: 0, col: 0, rest: raw, raw }
 	},
 
-	// A bare file path. Used for formatter drift, where the unit of change is
-	// the whole file and there is no line number to shift.
+	// A bare file path, for formatter drift: the unit of change is the whole
+	// file and there is no line number to shift.
 	file: (raw) => ({ file: raw, line: 0, col: 0, rest: raw, raw }),
 }
-
-// ── The diff ─────────────────────────────────────────────────────────────
 
 /**
  * Compare two sorted line lists and classify every difference.
@@ -84,17 +80,52 @@ function differential(baseLines, headLines, parse, proximity = DEFAULT_PROXIMITY
 	return { ...counts, added, resolved: pool, moved }
 }
 
-// ── Rendering ────────────────────────────────────────────────────────────
+const readText = (p) => {
+	try {
+		return fs.readFileSync(p, 'utf8')
+	} catch {
+		return ''
+	}
+}
 
-const readLines = (path) =>
-	fs.existsSync(path)
-		? fs.readFileSync(path, 'utf8').trim().split('\n').filter(Boolean)
+const readLines = (p) => readText(p).trim().split('\n').filter(Boolean)
+
+const readJson = (p) => {
+	const raw = readText(p)
+	return raw ? JSON.parse(raw) : null
+}
+
+/** One report section: the markdown a reader sees, and the sidecar the gate reads. */
+function writeFragment(out, name, markdown, sidecar) {
+	fs.mkdirSync(out, { recursive: true })
+	if (markdown !== null) fs.writeFileSync(path.join(out, `${name}.md`), markdown)
+	fs.writeFileSync(path.join(out, `${name}.json`), JSON.stringify(sidecar, null, 2))
+}
+
+/** The fragment for a check whose input never arrived. `gate.cjs` blocks on `missing`. */
+function writeMissingFragment(out, name, { check, title, reason, ...sidecar }) {
+	writeFragment(out, name, `#### ${title}\n\n⚠️ ${reason} Check the job log.`, {
+		check,
+		missing: true,
+		...sidecar,
+	})
+}
+
+/** Every `<order>-<name>.<ext>` fragment in a directory, in section order. */
+const fragmentFiles = (dir, ext) =>
+	fs.existsSync(dir)
+		? fs
+				.readdirSync(dir, { recursive: true })
+				.filter((f) => typeof f === 'string' && f.endsWith(ext))
+				.sort()
 		: []
 
 const trend = (head, base) => (head < base ? '🟢' : head > base ? '🔺' : '➖')
 
-const movedNote = (moved, proximity = DEFAULT_PROXIMITY) =>
-	moved.length ? ` (${moved.length} shifted within ±${proximity} lines, not counted)` : ''
+const movedNote = (moved) =>
+	moved.length
+		? ` (${moved.length} shifted within ±${DEFAULT_PROXIMITY} lines, not counted)`
+		: ''
 
 /** "**Before:** 4 error(s) → **After:** 6 error(s) (+2 new, −0 resolved)" */
 function countSummary(d, noun, { showTrend = false } = {}) {
@@ -111,14 +142,14 @@ function countSummary(d, noun, { showTrend = false } = {}) {
  * Returns null when there is nothing to show, so callers can drop the section
  * with `.filter((l) => l !== null)` without also dropping their blank lines.
  */
-function listBlock(title, items, cap = 50) {
+function listBlock(title, items, { join = '\n' } = {}) {
 	if (!items.length) return null
-	const shown = items.slice(0, cap).map((e) => e.raw ?? e)
-	const more = items.length > cap ? `\n… and ${items.length - cap} more` : ''
-	return `\n**${title} (${items.length}):**\n\`\`\`\n${shown.join('\n')}${more}\n\`\`\``
+	const shown = items.slice(0, CAP).map((e) => e.raw ?? e)
+	const more = items.length > CAP ? `${join}… and ${items.length - CAP} more` : ''
+	return `\n**${title} (${items.length}):**\n\`\`\`\n${shown.join(join)}${more}\n\`\`\``
 }
 
-/** Group file paths by extension: 80 .sql files read differently from 80 .tsx. */
+/** Group file paths by extension: 80 .json files read differently from 80 .tsx. */
 function byExtension(files) {
 	const counts = {}
 	for (const f of files) {
@@ -130,15 +161,13 @@ function byExtension(files) {
 	return Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 }
 
-// ── Size reporting ───────────────────────────────────────────────────────
-
 const formatBytes = (n) => (n / 1024).toFixed(2) + ' kB'
 
 function deltaLabel(head, base) {
 	const d = head - base
 	const pct = base ? ((d / base) * 100).toFixed(2) : '0.00'
 	const sign = d > 0 ? '+' : ''
-	return `${trend(head, base)} ${sign}${(d / 1024).toFixed(2)} kB (${sign}${pct}%)`
+	return `${trend(head, base)} ${sign}${formatBytes(d)} (${sign}${pct}%)`
 }
 
 function sizeTable(headRaw, headGz, baseRaw, baseGz) {
@@ -150,73 +179,15 @@ function sizeTable(headRaw, headGz, baseRaw, baseGz) {
 	].join('\n')
 }
 
-// ── Self-test ────────────────────────────────────────────────────────────
-
-function selftest() {
-	const assert = require('assert')
-	const p = parsers.unix
-
-	// A pure line shift is paired, not double-counted.
-	const shifted = differential(
-		['a.ts:10:5: no-explicit-any'],
-		['a.ts:14:5: no-explicit-any'],
-		p,
-	)
-	assert.equal(shifted.added.length, 0, 'shift within tolerance must not count as new')
-	assert.equal(
-		shifted.resolved.length,
-		0,
-		'shift within tolerance must not count as resolved',
-	)
-	assert.equal(shifted.moved.length, 1)
-
-	// Beyond the tolerance it is a genuine change.
-	const far = differential(
-		['a.ts:10:5: no-explicit-any'],
-		['a.ts:99:5: no-explicit-any'],
-		p,
-	)
-	assert.equal(far.added.length, 1, 'shift beyond tolerance must count as new')
-	assert.equal(far.resolved.length, 1)
-
-	// A changed column is a real new issue even when the line barely moved.
-	const recolumned = differential(
-		['a.ts:10:5: no-explicit-any'],
-		['a.ts:11:9: no-explicit-any'],
-		p,
-	)
-	assert.equal(recolumned.added.length, 1, 'changed column must count as new')
-
-	// proximity 0 is a plain set difference.
-	const plain = differential(['x.ts'], ['y.ts'], parsers.file, 0)
-	assert.equal(plain.added.length, 1)
-	assert.equal(plain.resolved.length, 1)
-	assert.equal(plain.moved.length, 0)
-
-	// Identical input is a no-op.
-	const same = differential(['a.ts:1:1: x'], ['a.ts:1:1: x'], p)
-	assert.equal(same.added.length + same.resolved.length + same.moved.length, 0)
-
-	// tsc lines parse into their parts.
-	const t = parsers.tsc("src/foo.ts(12,5): error TS2339: Property 'x' does not exist.")
-	assert.equal(t.file, 'src/foo.ts')
-	assert.equal(t.line, 12)
-	assert.equal(t.col, 5)
-
-	// An unparseable line still round-trips instead of being dropped.
-	const junk = parsers.tsc('some unstructured warning')
-	assert.equal(junk.raw, 'some unstructured warning')
-
-	console.log('delta.cjs self-test passed (7 cases)')
-}
-
 module.exports = {
-	DEFAULT_PROXIMITY,
 	parsers,
 	differential,
+	readText,
 	readLines,
-	trend,
-	movedNote,
+	readJson,
+	writeFragment,
+	writeMissingFragment,
+	fragmentFiles,
 	countSummary,
 	listBlock,
 	byExtension,
@@ -224,5 +195,3 @@ module.exports = {
 	deltaLabel,
 	sizeTable,
 }
-
-if (require.main === module && process.argv.includes('--selftest')) selftest()

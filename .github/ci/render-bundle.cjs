@@ -5,11 +5,14 @@
 // Takes the JSON summaries written by measure-bundle.cjs, not the built
 // directories — the report job never has either tree checked out.
 
-const fs = require('fs')
-const path = require('path')
-const { formatBytes, deltaLabel, sizeTable } = require('./delta.cjs')
-
-const load = (p) => (fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null)
+const {
+	readJson,
+	writeFragment,
+	writeMissingFragment,
+	formatBytes,
+	deltaLabel,
+	sizeTable,
+} = require('./delta.cjs')
 
 // Two builds of the same commit differ by a few bytes per chunk. Below this,
 // call it unchanged rather than teaching people that the number is noise.
@@ -17,11 +20,6 @@ const NOISE_FLOOR = 512
 
 const formatMB = (n) => (n / 1048576).toFixed(2) + ' MB'
 
-/**
- * The Worker is the one axis with a hard external limit. Cloudflare rejects a
- * deploy over 10 MB gzipped on Workers Paid, so this is a budget, not a trend.
- * Report it as a percentage of the limit, and the raw sizes underneath.
- */
 function workerSection(base, head) {
 	const limit = head.worker.limit
 	const pct = (head.worker.gz / limit) * 100
@@ -33,14 +31,6 @@ function workerSection(base, head) {
 	].join('\n')
 }
 
-/**
- * Compare eager chunks by identity, not size.
- *
- * This is the axis people miss. A chunk whose content hash is unchanged is
- * still in returning visitors' caches. A PR that adds 2 kB to one has really
- * cost every returning visitor the WHOLE chunk again, which may be 200 kB. So
- * report which chunks changed first, and their sizes second.
- */
 function chunkSection(base, head) {
 	const names = [
 		...new Set([...Object.keys(base.eagerChunks), ...Object.keys(head.eagerChunks)]),
@@ -86,31 +76,24 @@ function chunkSection(base, head) {
 }
 
 module.exports = function render({ head, base, out }) {
-	fs.mkdirSync(out, { recursive: true })
-	const h = load(head)
-	const b = load(base)
+	const h = readJson(head)
+	const b = readJson(base)
 
-	// A missing measurement means a build failed. Say so rather than rendering
-	// a delta against zeros, which would read as "the whole bundle is new".
-	//
-	// An EMPTY measurement is the same failure wearing a disguise: a build that
+	// An EMPTY measurement is a failed build wearing a disguise: a build that
 	// exits zero and writes nothing would otherwise report a triumphant −100%.
 	const empty = (m) => !m || !m.fileCount || !m.worker
 	if (empty(h) || empty(b)) {
 		const which =
 			empty(h) && empty(b)
-				? 'Neither build produced a measurable bundle'
+				? 'Neither build'
 				: empty(h)
-					? 'The PR build produced no measurable bundle'
-					: 'The base build produced no measurable bundle'
-		fs.writeFileSync(
-			path.join(out, '40-bundle.md'),
-			`#### Bundle size\n\n⚠️ ${which}, so there is nothing to compare. Check the job log.`,
-		)
-		fs.writeFileSync(
-			path.join(out, '40-bundle.json'),
-			JSON.stringify({ check: 'bundle', missing: true }, null, 2),
-		)
+					? 'The PR build'
+					: 'The base build'
+		writeMissingFragment(out, '40-bundle', {
+			check: 'bundle',
+			title: 'Bundle size',
+			reason: `${which} produced a measurable bundle, so there is nothing to compare.`,
+		})
 		return
 	}
 
@@ -139,32 +122,17 @@ module.exports = function render({ head, base, out }) {
 		chunkSection(b, h),
 	].join('\n')
 
-	// Below the noise floor, report a delta as zero. Two builds of the same
-	// commit differ by a few bytes, and a budget that trips on those teaches
-	// people the number means nothing.
 	const floor = (n) => (Math.abs(n) < NOISE_FLOOR ? 0 : n)
-	fs.writeFileSync(path.join(out, '40-bundle.md'), markdown)
-	fs.writeFileSync(
-		path.join(out, '40-bundle.json'),
-		JSON.stringify(
-			{
-				check: 'bundle',
-				eagerRawDelta: h.js.raw - b.js.raw,
-				eagerGzDelta: floor(h.js.gz - b.js.gz),
-				eagerGzBase: b.js.gz,
-				entryGzDelta: h.entry.gz - b.entry.gz,
-				cssGzDelta: h.css.gz - b.css.gz,
-				lazyGzDelta: h.lazy.gz - b.lazy.gz,
-				workerGz: h.worker.gz,
-				workerGzLimit: h.worker.limit,
-				workerGzDelta: floor(h.worker.gz - b.worker.gz),
-			},
-			null,
-			2,
-		),
-	)
+	writeFragment(out, '40-bundle', markdown, {
+		check: 'bundle',
+		eagerRawDelta: h.js.raw - b.js.raw,
+		eagerGzDelta: floor(h.js.gz - b.js.gz),
+		eagerGzBase: b.js.gz,
+		entryGzDelta: h.entry.gz - b.entry.gz,
+		cssGzDelta: h.css.gz - b.css.gz,
+		lazyGzDelta: h.lazy.gz - b.lazy.gz,
+		workerGz: h.worker.gz,
+		workerGzLimit: h.worker.limit,
+		workerGzDelta: floor(h.worker.gz - b.worker.gz),
+	})
 }
-
-module.exports.chunkSection = chunkSection
-module.exports.workerSection = workerSection
-module.exports.NOISE_FLOOR = NOISE_FLOOR

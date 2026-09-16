@@ -1,133 +1,107 @@
 'use strict'
 
-// Turn two directories of collected static-check output into markdown
-// fragments plus a gate sidecar. Section order comes from the numeric filename
-// prefix, so fragments render consistently whatever order the jobs finish in.
-
 const fs = require('fs')
-const path = require('path')
 const {
 	parsers,
 	differential,
 	readLines,
+	writeFragment,
+	writeMissingFragment,
 	countSummary,
 	listBlock,
 	byExtension,
 } = require('./delta.cjs')
 
-// How many issues to print before collapsing to "… and N more".
-const CAP = 50
+// The two line-oriented checks. Both diff one tool's output against the same
+// tool on base, so they differ only in their parser and their nouns.
+const LINE_CHECKS = [
+	{
+		name: '10-typecheck',
+		check: 'typecheck',
+		title: 'Type errors',
+		noun: 'error(s)',
+		parse: parsers.tsc,
+	},
+	{
+		name: '20-lint',
+		check: 'lint',
+		title: 'Lint',
+		noun: 'issue(s)',
+		parse: parsers.unix,
+	},
+]
+
+const FORMAT = { name: '30-format', check: 'format', title: 'Formatter drift' }
+
+// What `collect-static.sh` writes, plus the `touched.txt` the workflow writes
+// beside it. A tree counts as measured only when every one of them is present.
+// The DIRECTORY is not enough: a job that dies midway can leave an empty one,
+// and empty inputs diff to "no change" — the most dangerous thing this report
+// can say.
+const STATIC_FILES = ['typecheck.txt', 'lint.txt', 'format.txt']
+
+const measured = (dir, files) => files.every((f) => fs.existsSync(`${dir}/${f}`))
 
 module.exports = function render({ head, base, out }) {
-	fs.mkdirSync(out, { recursive: true })
-	const write = (name, markdown, gate) => {
-		fs.writeFileSync(path.join(out, `${name}.md`), markdown)
-		fs.writeFileSync(path.join(out, `${name}.json`), JSON.stringify(gate, null, 2))
-	}
-
-	// A whole tree's output directory is absent when that job died before the
-	// static checks ran. Diffing nothing against nothing renders "no change",
-	// which is the most dangerous thing this report can say, so name the tree
-	// that is missing and let the gate fail all three checks.
-	const missingTree = !fs.existsSync(head)
+	const missingTree = !measured(head, [...STATIC_FILES, 'touched.txt'])
 		? 'The PR'
-		: !fs.existsSync(base)
+		: !measured(base, STATIC_FILES)
 			? 'The base branch'
 			: null
 	if (missingTree) {
-		for (const [name, check, title] of [
-			['10-typecheck', 'typecheck', 'Type errors'],
-			['20-lint', 'lint', 'Lint'],
-			['30-format', 'format', 'Formatter drift'],
-		]) {
-			write(
-				name,
-				`#### ${title}\n\n⚠️ ${missingTree} job produced no measurement, so there is nothing to compare. Check the job log.`,
-				{ check, missing: true },
-			)
+		for (const { name, check, title } of [...LINE_CHECKS, FORMAT]) {
+			writeMissingFragment(out, name, {
+				check,
+				title,
+				reason: `${missingTree} job produced no measurement, so there is nothing to compare.`,
+			})
 		}
 		return
 	}
 
-	// ── Type errors ──────────────────────────────────────────────────────
-	const tc = differential(
-		readLines(`${base}/typecheck.txt`),
-		readLines(`${head}/typecheck.txt`),
-		parsers.tsc,
-	)
-	write(
-		'10-typecheck',
-		[
-			'#### Type errors',
-			'',
-			countSummary(tc, 'error(s)'),
-			listBlock('New', tc.added, CAP),
-			listBlock('Resolved', tc.resolved, CAP),
-		]
-			.filter((l) => l !== null)
-			.join('\n'),
-		{
-			check: 'typecheck',
-			new: tc.added.length,
-			resolved: tc.resolved.length,
-			total: tc.head,
-		},
-	)
+	for (const { name, check, title, noun, parse } of LINE_CHECKS) {
+		const d = differential(
+			readLines(`${base}/${check}.txt`),
+			readLines(`${head}/${check}.txt`),
+			parse,
+		)
+		writeFragment(
+			out,
+			name,
+			[
+				`#### ${title}`,
+				'',
+				countSummary(d, noun),
+				listBlock('New', d.added),
+				listBlock('Resolved', d.resolved),
+			]
+				.filter((l) => l !== null)
+				.join('\n'),
+			{ check, new: d.added.length, resolved: d.resolved.length, total: d.head },
+		)
+	}
 
-	// ── Lint ─────────────────────────────────────────────────────────────
-	const lint = differential(
-		readLines(`${base}/lint.txt`),
-		readLines(`${head}/lint.txt`),
-		parsers.unix,
-	)
-	write(
-		'20-lint',
-		[
-			'#### Lint',
-			'',
-			countSummary(lint, 'issue(s)'),
-			listBlock('New', lint.added, CAP),
-			listBlock('Resolved', lint.resolved, CAP),
-		]
-			.filter((l) => l !== null)
-			.join('\n'),
-		{
-			check: 'lint',
-			new: lint.added.length,
-			resolved: lint.resolved.length,
-			total: lint.head,
-		},
-	)
-
-	// ── Formatter drift ──────────────────────────────────────────────────
 	// The unit is the file, not the line, so shift-pairing is switched off.
 	const headFiles = readLines(`${head}/format.txt`)
 	const fmt = differential(readLines(`${base}/format.txt`), headFiles, parsers.file, 0)
 	const ext = byExtension(headFiles)
 
-	// The blocking half. Totals and the trend are context; what fails the build
-	// is a file this PR touched that the formatter would still rewrite —
-	// whether that drift is new or was there all along. Both lists are
-	// repo-root-relative and sorted, so a plain Set intersection is enough.
-	//
-	// An absent touched.txt is NOT an empty PR. It means the workflow step that
-	// writes it did not run, so record that and let the gate refuse to pass.
-	const touchedKnown = fs.existsSync(`${head}/touched.txt`)
+	// Both lists are repo-root-relative and sorted, so a plain Set intersection
+	// is enough.
 	const touched = new Set(readLines(`${head}/touched.txt`))
 	const dirtyTouched = headFiles.filter((f) => touched.has(f))
 	const elsewhere = fmt.added.filter((e) => !touched.has(e.file))
 
-	write(
-		'30-format',
+	writeFragment(
+		out,
+		FORMAT.name,
 		[
-			'#### Formatter drift',
+			`#### ${FORMAT.title}`,
 			'',
 			dirtyTouched.length
 				? `❌ **${dirtyTouched.length} file(s) this PR touches are not formatted.** Run the formatter and commit — a file you edited ships clean, no exceptions.`
-				: touchedKnown
-					? '✅ Every file this PR touches is formatted.'
-					: '⚠️ No list of touched files was produced, so the touched-file gate could not run.',
-			listBlock('Touched and unformatted', dirtyTouched, CAP),
+				: '✅ Every file this PR touches is formatted.',
+			listBlock('Touched and unformatted', dirtyTouched),
 			'',
 			'Repo-wide drift below is **context, not a gate** — debt to drive toward **0** by reformatting legacy files as you touch them.',
 			'',
@@ -135,18 +109,17 @@ module.exports = function render({ head, base, out }) {
 			ext.length
 				? '\n**By type:** ' + ext.map(([e, n]) => `\`${e}\` ${n}`).join(' · ')
 				: null,
-			listBlock('Newly unformatted elsewhere', elsewhere, CAP),
-			listBlock('Reformatted', fmt.resolved, CAP),
+			listBlock('Newly unformatted elsewhere', elsewhere),
+			listBlock('Reformatted', fmt.resolved),
 		]
 			.filter((l) => l !== null)
 			.join('\n'),
 		{
-			check: 'format',
+			check: FORMAT.check,
 			new: fmt.added.length,
 			resolved: fmt.resolved.length,
 			total: fmt.head,
 			touched: dirtyTouched.length,
-			touchedKnown,
 		},
 	)
 }

@@ -1,27 +1,26 @@
 'use strict'
 
-// Render a test-run fragment. Single-branch: a test either passes on head or
-// it does not, so there is nothing to diff against base.
-//
-// `parse` reads the JSON that `vitest run --reporter=json` writes, which is the
-// Jest shape: counts at the top level, one entry per file in `testResults`.
+// Single-branch: a test either passes on head or it does not, so there is
+// nothing to diff against base.
 
 const fs = require('fs')
-const path = require('path')
+const { writeFragment, writeMissingFragment, listBlock } = require('./delta.cjs')
 
-const CAP = 20
-
+/**
+ * `vitest run --reporter=json` writes the Jest shape: counts at the top level,
+ * one entry per file in `testResults`.
+ */
 function parse(raw) {
 	const r = JSON.parse(raw)
 	const failures = []
 	for (const file of r.testResults ?? []) {
 		for (const t of file.assertionResults ?? []) {
 			if (t.status !== 'failed') continue
-			failures.push({
-				name: [...(t.ancestorTitles ?? []), t.title].join(' › '),
-				file: file.name?.replace(process.cwd() + '/', '') ?? '',
-				message: (t.failureMessages ?? []).join('\n').split('\n')[0] ?? '',
-			})
+			failures.push(
+				`✗ ${[...(t.ancestorTitles ?? []), t.title].join(' › ')}\n` +
+					`  ${file.name?.replace(process.cwd() + '/', '') ?? ''}\n` +
+					`  ${(t.failureMessages ?? []).join('\n').split('\n')[0] ?? ''}`.trimEnd(),
+			)
 		}
 	}
 	return {
@@ -34,44 +33,33 @@ function parse(raw) {
 }
 
 module.exports = function render({ results, out }) {
-	fs.mkdirSync(out, { recursive: true })
-
 	if (!fs.existsSync(results)) {
-		fs.writeFileSync(
-			path.join(out, '50-tests.md'),
-			'#### Tests\n\n⚠️ No results file was produced — the runner probably crashed before writing output. Check the job log.',
-		)
-		// A missing report is a failure, not a pass. Say so to the gate.
-		fs.writeFileSync(
-			path.join(out, '50-tests.json'),
-			JSON.stringify({ check: 'tests', failed: 1, missing: true }, null, 2),
-		)
+		// A missing report is a failure, not a pass. `failed: 1` says so even
+		// though no individual test can be named.
+		writeMissingFragment(out, '50-tests', {
+			check: 'tests',
+			title: 'Tests',
+			reason:
+				'No results file was produced — the runner probably crashed before writing output.',
+			failed: 1,
+		})
 		return
 	}
 
 	const s = parse(fs.readFileSync(results, 'utf8'))
-	const icon = s.failed ? '❌' : '✅'
-	const lines = [
-		'#### Tests',
-		'',
-		`${icon} ${s.passed}/${s.total} passed` +
-			(s.failed ? ` · **${s.failed} failed**` : '') +
-			(s.skipped ? ` · ${s.skipped} skipped` : ''),
-	]
-
-	if (s.failures.length) {
-		const shown = s.failures.slice(0, CAP)
-		const block = shown
-			.map((f) => `✗ ${f.name}\n  ${f.file}\n  ${f.message}`.trimEnd())
-			.join('\n\n')
-		const more =
-			s.failures.length > CAP ? `\n\n… and ${s.failures.length - CAP} more` : ''
-		lines.push('', `**Failed (${s.failures.length}):**`, '', '```', block + more, '```')
-	}
-
-	fs.writeFileSync(path.join(out, '50-tests.md'), lines.join('\n'))
-	fs.writeFileSync(
-		path.join(out, '50-tests.json'),
-		JSON.stringify({ check: 'tests', failed: s.failed, total: s.total }, null, 2),
+	writeFragment(
+		out,
+		'50-tests',
+		[
+			'#### Tests',
+			'',
+			`${s.failed ? '❌' : '✅'} ${s.passed}/${s.total} passed` +
+				(s.failed ? ` · **${s.failed} failed**` : '') +
+				(s.skipped ? ` · ${s.skipped} skipped` : ''),
+			listBlock('Failed', s.failures, { join: '\n\n' }),
+		]
+			.filter((l) => l !== null)
+			.join('\n'),
+		{ check: 'tests', failed: s.failed, total: s.total },
 	)
 }

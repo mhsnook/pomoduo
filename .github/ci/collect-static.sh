@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
-# Collect normalised static-check output into $1.
-#
-# Runs once on the head tree and once on the base tree, always from that tree's
-# own root. Output is one sorted line per issue, so the diff engine can treat
-# the two runs as comparable sets.
-#
-# NOTE: this script ends by restoring the tree with `git checkout -- .`. That is
-# correct in CI, where the checkout is clean. Run it against a working tree with
-# uncommitted edits and it discards them.
+# Collect normalised static-check output into $1, one sorted line per issue, so
+# the diff engine can treat a head run and a base run as comparable sets.
 
 # Deliberately no `-e`: every check here exits non-zero when it finds issues,
 # which is the normal case, not a script failure.
@@ -21,29 +14,9 @@ mkdir -p "$OUT"
 # punctuation, which would order `.oxfmtrc.json` after `AGENTS.md`.
 export LC_ALL=C
 
-# Paths kept out of the lint and formatter deltas. Generated and built code
-# produces noise nobody on the PR can act on.
-#
-# This repeats what `.oxlintrc.json` and `.oxfmtrc.json` already ignore. Each
-# tree is measured with its own config until the base job checks the configs out
-# from head, so duplicating the list means a PR that edits an ignore rule cannot
-# move its own baseline.
-#
-# `worker-configuration.d.ts` is written by `wrangler types` on every install.
-# `dist/`, `.wrangler/`, `*.tsbuildinfo` and `prototypes/` are untracked build
-# and scratch output.
-#
-# `.github/ci/` is excluded for a different reason: the base job checks these
-# scripts out from head, so BOTH trees lint head's copy of them and any issue
-# here would cancel out to "no change". Better to leave them out of the delta
-# than to report a number that cannot move. `pnpm check` still covers them
-# locally, which is where an issue in these files does show up.
-EXCLUDE='^(dist/|\.wrangler/|prototypes/|\.github/ci/|worker-configuration\.d\.ts$|.*\.tsbuildinfo$)'
-
 # `tsconfig.worker.json` includes `worker-configuration.d.ts`, which the
 # `postinstall` script generates. The typecheck must work on a tree that does
-# not build, so regenerate it here rather than depending on the build step. The
-# install normally did this already; this is the cheap guard for when it did not.
+# not build, so regenerate it here rather than depending on the build step.
 [ -f worker-configuration.d.ts ] || pnpm exec wrangler types >/dev/null 2>&1
 
 # Read-only checks run concurrently. The typechecker is the long pole and the
@@ -54,8 +27,8 @@ EXCLUDE='^(dist/|\.wrangler/|prototypes/|\.github/ci/|worker-configuration\.d\.t
 	# base tree does not have it. Every command here is `pnpm exec <tool>` for
 	# that reason; the scripts stay in package.json for humans.
 	#
-	# `tsc --build` walks the four project references. Keep the grep: it drops
-	# anything that is not a diagnostic, which would otherwise diff as noise.
+	# Keep the grep: it drops anything that is not a diagnostic, which would
+	# otherwise diff as noise.
 	#
 	# `sort -u`, not plain `sort`: `src/shared` is included by both
 	# `tsconfig.client.json` and `tsconfig.worker.json`, so every error in shared
@@ -74,36 +47,21 @@ EXCLUDE='^(dist/|\.wrangler/|prototypes/|\.github/ci/|worker-configuration\.d\.t
 	fi
 ) &
 (
-	# oxlint is the only linter here. `-f unix` gives `file:line:col: message`,
-	# which is what the diff engine's `unix` parser reads.
-	pnpm exec oxlint . -f unix >"$OUT/.oxlint.raw" 2>&1
-	grep -E '^[^:[:space:]][^:]*:[0-9]+:[0-9]+:' "$OUT/.oxlint.raw" |
-		grep -Ev "$EXCLUDE" |
+	# `-f unix` gives `file:line:col: message`, which is what the diff engine's
+	# `unix` parser reads.
+	pnpm exec oxlint . -f unix 2>&1 |
+		grep -E '^[^:[:space:]][^:]*:[0-9]+:[0-9]+:' |
 		sort -u >"$OUT/lint.txt"
 ) &
 wait
 
-# The formatter REWRITES files, so it runs after the read-only checks. The set
-# of files it modified is exactly the formatting debt — no separate --check
-# pass needed. Restore the tree afterwards so later steps see a clean checkout.
+# `--list-different`, not `oxfmt .`: the write mode would reformat the tree and
+# need `git checkout -- .` to put it back, which silently discards a developer's
+# uncommitted edits when this script is run locally.
 #
-# `git diff --name-only` gives repo-root-relative paths with no `./` prefix,
-# which is the same shape the workflow's `touched.txt` step produces. The
-# formatter gate intersects the two lists, and a shape mismatch would make that
-# intersection empty on every PR.
-pnpm exec oxfmt . >/dev/null 2>&1
-git diff --name-only | grep -Ev "$EXCLUDE" | sort >"$OUT/format.txt"
-git checkout -- .
+# Its paths are repo-root-relative with no `./` prefix, the same shape the
+# workflow's `touched.txt` step produces. The formatter gate intersects the two
+# lists, and a shape mismatch would make that intersection empty on every PR.
+pnpm exec oxfmt --list-different . 2>/dev/null | sort >"$OUT/format.txt"
 
-# Never let a missing file break the render step.
-#
-# `touched.txt` is deliberately NOT in this list. The workflow writes it into
-# the same directory on the head tree only, and the formatter gate reads its
-# ABSENCE as "the step that lists this PR's files did not run" — an empty file
-# here would turn that failure into a silent pass.
-for f in typecheck lint format; do
-	[ -f "$OUT/$f.txt" ] || : >"$OUT/$f.txt"
-done
-
-rm -f "$OUT/.oxlint.raw"
 wc -l "$OUT"/*.txt

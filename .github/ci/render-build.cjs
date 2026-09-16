@@ -1,58 +1,30 @@
 'use strict'
 
-// Check 0: did the build survive, and whose fault is it?
-//
-//   node -e "require('./.github/ci/render-build.cjs')({
-//     head: '/tmp/head', base: '/tmp/base', out: '/tmp/fragments'
-//   })"
-//
-// Both build steps run under `continue-on-error` and write two files into their
-// artifact: `build.outcome` (the step outcome) and `build.log`. Reading both
-// trees is what turns "the build failed" into one of four different messages.
-// A PR that inherits a broken base branch should not be told it broke the
-// build, and a PR that repairs one deserves to hear so.
-//
-// When both trees build, this writes no markdown at all. A bot that says "the
-// build works" on every green PR is scroll cost.
+// Check 0: reads `build.outcome` and `build.log` from both trees' artifacts and
+// says whether this PR broke the build or inherited a broken base branch.
 
-const fs = require('fs')
 const path = require('path')
+const { readText, writeFragment, writeMissingFragment } = require('./delta.cjs')
 
 // How many log lines to quote. Enough to carry one error plus its import trace.
 const EXCERPT = 40
 
-// The first line of an error in `vite build` output. Vite opens with `error
-// during build:`; rolldown and esbuild-style plugins open with `×`, `✘` or
-// `x [ERROR]`. The excerpt is anchored on this rather than on the tail of the
-// log, because vite prints the failing plugin, a stack, and pnpm's
-// `[ELIFECYCLE]` line after the part a reader needs.
+// The first line of an error in `vite build` output. The excerpt anchors on
+// this rather than on the tail of the log, because vite prints the failing
+// plugin, a stack, and pnpm's `[ELIFECYCLE]` line after the part a reader needs.
 //
 // `[plugin ...]` is deliberately not an anchor: a SUCCESSFUL client build emits
 // `[plugin builtin:vite-reporter]` with the chunk-size warning, and anchoring
 // on it would start the excerpt at a warning rather than at the failure.
 const ERROR_HEADING = /^\s*(error|ERROR|Error:|\[vite[:\]]|x \[ERROR\]|✘|×|✗|failed to)/
 
-const read = (p) => {
-	try {
-		return fs.readFileSync(p, 'utf8')
-	} catch {
-		return ''
-	}
-}
-
-/** `success`, `failure`, `skipped`, `cancelled`, or '' when the file is absent. */
-const outcome = (dir) => read(path.join(dir, 'build.outcome')).trim()
-
-// Only `success` counts as built. `skipped` and `cancelled` mean the tree was
+// '' when the job never reached the recording step; otherwise the step outcome.
+// Only `success` counts as built — `skipped` and `cancelled` mean the tree was
 // never measured, which is not the same as a clean build.
-const built = (o) => o === 'success'
+const outcome = (dir) => readText(path.join(dir, 'build.outcome')).trim()
 
-/**
- * Strip ANSI so a colourised log does not render as escape codes in markdown.
- *
- * The ESC control character is the point here: it is what vite writes when it
- * thinks it has a terminal, so `no-control-regex` is off for this line only.
- */
+// The ESC control character is the point here, so `no-control-regex` is off for
+// this line only.
 // oxlint-disable-next-line no-control-regex
 const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '')
 
@@ -80,51 +52,40 @@ function excerpt(log) {
 }
 
 module.exports = function render({ head, base, out }) {
-	fs.mkdirSync(out, { recursive: true })
-
 	const headOutcome = outcome(head)
 	const baseOutcome = outcome(base)
+	const headOk = headOutcome === 'success'
+	const baseOk = baseOutcome === 'success'
 
-	// Neither job recorded an outcome: this repo took no build-dependent check,
-	// or both jobs died before the recording step. Say nothing and let the other
-	// checks' own missing-measurement rules speak.
-	if (!headOutcome && !baseOutcome) return
-
-	const headOk = built(headOutcome)
-	const baseOk = built(baseOutcome)
-
-	let markdown = null
-	if (headOk && baseOk) {
-		markdown = null
-	} else if (headOk && !baseOk) {
-		markdown = [
-			'#### Build',
-			'',
-			`✅ **This PR fixes the build.** The base branch does not build (\`${baseOutcome || 'no result'}\`); this tree does.`,
-		].join('\n')
-	} else if (!headOk && baseOk) {
-		markdown = [
-			'#### Build',
-			'',
-			'❌ **This PR breaks the build.** The base branch builds and this tree does not.',
-			'',
-			excerpt(read(path.join(head, 'build.log'))),
-		].join('\n')
-	} else {
-		markdown = [
-			'#### Build',
-			'',
-			'❌ **Neither tree builds.** The base branch is already broken, so this PR is probably not the cause — repair the base branch first.',
-			'',
-			excerpt(read(path.join(head, 'build.log'))),
-		].join('\n')
+	// Neither job recorded an outcome, so neither tree was measured. Saying
+	// "neither tree builds" here would blame a base branch nobody tested.
+	if (!headOutcome && !baseOutcome) {
+		writeMissingFragment(out, '05-build', {
+			check: 'build',
+			title: 'Build',
+			reason: 'Neither job recorded a build outcome, so the build was never measured.',
+			headOk,
+			baseOk,
+		})
+		return
 	}
 
-	if (markdown) fs.writeFileSync(path.join(out, '05-build.md'), markdown)
-	fs.writeFileSync(
-		path.join(out, '05-build.json'),
-		JSON.stringify({ check: 'build', headOk, baseOk, headOutcome, baseOutcome }, null, 2),
-	)
-}
+	// A green build on both trees writes no markdown: a bot that says "the
+	// build works" on every green PR is scroll cost. The sidecar is still
+	// written, because `gate.cjs` blocks when a check reports nothing at all.
+	const markdown =
+		headOk && baseOk
+			? null
+			: [
+					'#### Build',
+					'',
+					headOk
+						? `✅ **This PR fixes the build.** The base branch does not build (\`${baseOutcome || 'no result'}\`); this tree does.`
+						: baseOk
+							? '❌ **This PR breaks the build.** The base branch builds and this tree does not.'
+							: '❌ **Neither tree builds.** The base branch is already broken, so this PR is probably not the cause — repair the base branch first.',
+					...(headOk ? [] : ['', excerpt(readText(path.join(head, 'build.log')))]),
+				].join('\n')
 
-module.exports.excerpt = excerpt
+	writeFragment(out, '05-build', markdown, { check: 'build', headOk, baseOk })
+}

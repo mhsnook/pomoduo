@@ -4,23 +4,18 @@
 //
 //   node measure-bundle.cjs dist /tmp/out/bundle.json
 //
-// Runs in the build job, next to the dist/ it reads. The report job then diffs
-// two summaries, so it never needs either tree — which is what lets the head
-// and base builds happen once each, in parallel, on separate runners.
-//
-// `vite build` with @cloudflare/vite-plugin writes a split output, and the two
-// halves move for different reasons, so they get separate axes:
+// `vite build` with @cloudflare/vite-plugin writes two halves that move for
+// different reasons, so they get separate axes:
 //
 //   dist/client/    the SPA. index.html names the eager set — the files a first
-//                   paint must download. Everything else the build emitted is
-//                   lazy, and stays on its own line.
-//   dist/<worker>/  the Worker bundle Cloudflare runs. Named after `name` in
-//                   wrangler.jsonc, so it is discovered rather than hardcoded.
-//                   Its GZIPPED size is a hard deploy limit, not a preference.
+//                   paint must download. Everything else is lazy.
+//   dist/<worker>/  the Worker bundle Cloudflare runs, named after `name` in
+//                   wrangler.jsonc.
 
 const fs = require('fs')
 const path = require('path')
 const zlib = require('zlib')
+const { formatBytes } = require('./delta.cjs')
 
 // Cloudflare's limit on a deployed Worker, gzipped, on the Workers Paid plan.
 // Exceed it and `wrangler deploy` fails, so this is a budget rather than a trend.
@@ -30,14 +25,12 @@ const WORKER_GZ_LIMIT = 10 * 1024 * 1024
 // logical chunk is comparable across two builds, and keep the real filename
 // alongside — an unchanged hash means returning visitors still have the chunk.
 //
-// Each accepted length is exact, and that is load-bearing. A range like {8,20}
-// matches from the FIRST dash in `client-entry-a1b2c3d4.js`, because
-// `entry-a1b2c3d4` is itself inside the range — the key becomes `client.js`,
-// and every chunk whose name contains a dash collapses onto a neighbour's key.
-// The identity comparison would then call two different files one unchanged
-// chunk. The 16- and 20-digit alternatives cover Webpack, in case the bundler
-// ever changes under this app.
-const STRIP_HASH = /[-.](?:[A-Za-z0-9_-]{8}|[A-Za-z0-9]{16}|[a-f0-9]{20})(\.[a-z0-9]+)$/
+// The length is exact, and that is load-bearing. A range like {8,20} matches
+// from the FIRST dash in `client-entry-a1b2c3d4.js`, because `entry-a1b2c3d4`
+// is itself inside the range — the key becomes `client.js`, and every chunk
+// whose name contains a dash collapses onto a neighbour's key. The identity
+// comparison would then call two different files one unchanged chunk.
+const STRIP_HASH = /[-.][A-Za-z0-9_-]{8}(\.[a-z0-9]+)$/
 
 const sizeOf = (file) => {
 	const buf = fs.readFileSync(file)
@@ -64,12 +57,10 @@ function total(files) {
 }
 
 /**
- * Find the Worker output directory.
- *
- * The plugin names it after `name` in wrangler.jsonc, so hardcoding `pomoduo`
- * would break silently the day the Worker is renamed — the measurement would
- * report zero bytes and every PR would show the Worker vanishing. Take the one
- * top-level directory under dist/ that is not `client` instead.
+ * The plugin names the Worker directory after `name` in wrangler.jsonc, so
+ * hardcoding `pomoduo` would break silently the day the Worker is renamed —
+ * the measurement would report zero bytes and every PR would show the Worker
+ * vanishing. Take the one top-level directory under dist/ that is not `client`.
  */
 function findWorkerDir(dist) {
 	const dirs = fs
@@ -91,9 +82,7 @@ function measure(dist) {
 		throw new Error(`no index.html in ${clientDir} — did the client build run?`)
 	}
 
-	// The eager set: every asset index.html references directly. Lazy chunks are
-	// part of the app a user may never download, so folding them into one total
-	// would hide the number that matters.
+	// The eager set: every asset index.html references directly.
 	const html = fs.readFileSync(indexPath, 'utf8')
 	const eager = [
 		...new Set(
@@ -112,10 +101,6 @@ function measure(dist) {
 		// visitors' caches.
 		eagerChunks: {},
 		fileCount: 0,
-		// Where the eager set came from. This app has a real index.html, so the
-		// set is exact. A build that ever lost it would have to fall back to a
-		// walk, whose "eager" total is really everything the build emitted.
-		eagerSource: 'index.html',
 	}
 
 	for (const rel of eager) {
@@ -125,8 +110,6 @@ function measure(dist) {
 		result.fileCount++
 
 		if (name.endsWith('.css')) {
-			// Render-blocking on first paint, so part of the eager cost — but on its
-			// own axis, because it moves when the design changes, not the logic.
 			result.css = add(result.css, one)
 		} else {
 			result.js = add(result.js, one)
@@ -135,8 +118,7 @@ function measure(dist) {
 		result.eagerChunks[name.replace(STRIP_HASH, '$1')] = { file: name, ...one }
 	}
 
-	// Lazy chunks: everything else under dist/client a browser could fetch.
-	// Fonts and images are excluded — they are cached hard and do not belong in
+	// Fonts and images are excluded: they are cached hard and do not belong in
 	// the number watched per PR.
 	for (const file of walk(clientDir)) {
 		if (isEager.has(file)) continue
@@ -164,16 +146,6 @@ function measure(dist) {
 	return result
 }
 
-module.exports = {
-	measure,
-	walk,
-	sizeOf,
-	total,
-	findWorkerDir,
-	STRIP_HASH,
-	WORKER_GZ_LIMIT,
-}
-
 if (require.main === module) {
 	const [dist, out] = process.argv.slice(2)
 	if (!dist || !out) {
@@ -185,8 +157,8 @@ if (require.main === module) {
 	fs.writeFileSync(out, JSON.stringify(r, null, 2))
 	const pct = ((r.worker.gz / WORKER_GZ_LIMIT) * 100).toFixed(1)
 	console.log(
-		`client eager ${(r.js.gz / 1024).toFixed(2)} kB JS + ${(r.css.gz / 1024).toFixed(2)} kB CSS gzipped ` +
+		`client eager ${formatBytes(r.js.gz)} JS + ${formatBytes(r.css.gz)} CSS gzipped ` +
 			`(${Object.keys(r.eagerChunks).length} eager chunk(s), ${r.lazy.count} lazy) · ` +
-			`worker ${(r.worker.gz / 1024).toFixed(2)} kB gzipped (${pct}% of the 10 MB limit)`,
+			`worker ${formatBytes(r.worker.gz)} gzipped (${pct}% of the 10 MB limit)`,
 	)
 }

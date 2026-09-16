@@ -5,7 +5,7 @@ import { micFailure } from './mic'
 describe('micFailure', () => {
 	it('names the browser refusing the page', () => {
 		expect(micFailure({ name: 'NotAllowedError', message: '' })).toMatch(
-			/not letting the page/,
+			/not letting the page use the mic/,
 		)
 	})
 

@@ -1,5 +1,9 @@
-/** What the browser has said about this page using the mic. */
-export type MicPermission = 'granted' | 'denied' | 'prompt' | 'unknown'
+/**
+ * What to tell someone whose browser is holding the mic back from the page.
+ * A browser that has refused once does not ask again, so this says where to go.
+ */
+export const MIC_DENIED =
+	'Your browser is not letting the page use the mic. Let it through in the site settings beside the address bar, then reload.'
 
 /**
  * Asks the browser for the mic, then lets it go again. partytracks picks its
@@ -27,7 +31,7 @@ export function micFailure(error: Pick<Error, 'name' | 'message'>): string {
 	switch (error.name) {
 		case 'NotAllowedError':
 		case 'SecurityError':
-			return 'Your browser is not letting the page use the mic.'
+			return MIC_DENIED
 		case 'DevicesExhaustedError':
 		case 'NotFoundError':
 		case 'OverconstrainedError':

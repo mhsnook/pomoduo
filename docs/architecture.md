@@ -80,11 +80,16 @@ The session's part is `callOpen`, a column of the clock row, so `apply` settles
 it along with the phase and every device reaches the same answer at the same
 moment. `src/shared/clock.ts` says when it opens and closes.
 
-A member's part is three columns of their `members` row, written through
-`POST .../voice`: whether they have picked up, whether they are muted, and
-where the SFU carries their mic for the others to pull, or null when there is
-nothing to pull. `src/client/session/call.tsx` holds the connection and says
-what those three mean together.
+A member's part is four columns of their `members` row, written through
+`POST .../voice`: whether they have picked up, whether they are listening with
+no mic of their own, whether they are muted, and where the SFU carries their
+mic for the others to pull. `src/client/session/call.tsx` holds the connection
+and says what those four mean together.
+
+Mute and listening are not the same answer and neither stands in for the other:
+mute is the person's own, and carries from one call to the next; listening is
+the browser's, and says no mic is coming. `mic` is only ever an address to pull
+from, null while a track is still coming up and null for good for a listener.
 
 When the call closes, each device comes off it as its own clock reaches the
 same place, and the room clears the call columns for anyone who did not. A

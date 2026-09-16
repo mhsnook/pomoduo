@@ -1,7 +1,23 @@
-import { Mic, MicOff } from 'lucide-react'
+import { Ear, Mic, MicOff } from 'lucide-react'
 
 import type { Member } from '../../shared/schema'
 import { cn, displayName } from '../lib/format'
+
+/**
+ * How one member sits on the call. `mic` is where the others pull them from, so
+ * it says nothing until their track is up: a member with none is either
+ * listening for good, or a moment away from being heard.
+ */
+function OnCall({ member }: { member: Member }) {
+	if (member.listening)
+		return <Ear className="size-4 opacity-60" aria-label="on the call, listening" />
+	if (!member.mic) return null
+	return member.muted ? (
+		<MicOff className="size-4 opacity-60" aria-label="on the call, muted" />
+	) : (
+		<Mic className="size-4" aria-label="on the call" />
+	)
+}
 
 /** Who is in the session, and what each of them is working on. */
 export function Members({ members, you }: { members: Member[]; you: string }) {
@@ -42,16 +58,7 @@ export function Members({ members, you }: { members: Member[]; you: string }) {
 										{member.vote === 'dance' ? '💃' : '💬'}
 									</span>
 								)}
-								{member.onCall &&
-									member.mic &&
-									(member.muted ? (
-										<MicOff
-											className="size-4 opacity-60"
-											aria-label="on the call, muted"
-										/>
-									) : (
-										<Mic className="size-4" aria-label="on the call" />
-									))}
+								{member.onCall && <OnCall member={member} />}
 							</span>
 							{!member.here && <span className="opacity-60">away</span>}
 						</span>

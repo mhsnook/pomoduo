@@ -202,7 +202,7 @@ describe('the break vote at the end of work', () => {
 	})
 
 	it('keeps the kind of a break that a jump back returns to', () => {
-		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap', 'yap'])!
 		const inWork = apply(inYap, { type: 'skip' }, T + 12_000, [])!
 		const backInBreak = apply(inWork, { type: 'nudge', deltaMs: -60_000 }, T + 14_000, [
 			'dance',
@@ -213,7 +213,7 @@ describe('the break vote at the end of work', () => {
 	})
 
 	it('plays no music in a yap break, and leaves the break playlist where it was', () => {
-		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap', 'yap'])!
 		expect(musicPlays(inYap)).toBe(false)
 		const backToWork = apply(inYap, { type: 'rollover' }, inYap.endsAt!, [])!
 		expect(backToWork.playlist.break).toBe(inYap.playlist.break)
@@ -239,12 +239,15 @@ describe('the call', () => {
 	})
 
 	it('opens when a yap break starts, however work ended', () => {
-		expect(apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!.callOpen).toBe(true)
-		expect(apply(running(), { type: 'rollover' }, T + 60_000, ['yap'])!.callOpen).toBe(
+		expect(apply(running(), { type: 'skip' }, T + 10_000, ['yap', 'yap'])!.callOpen).toBe(
 			true,
 		)
 		expect(
-			apply(running(), { type: 'nudge', deltaMs: 10_000 }, T + 56_000, ['yap'])!.callOpen,
+			apply(running(), { type: 'rollover' }, T + 60_000, ['yap', 'yap'])!.callOpen,
+		).toBe(true)
+		expect(
+			apply(running(), { type: 'nudge', deltaMs: 10_000 }, T + 56_000, ['yap', 'yap'])!
+				.callOpen,
 		).toBe(true)
 	})
 
@@ -255,20 +258,20 @@ describe('the call', () => {
 	})
 
 	it('cuts when the yap break ends', () => {
-		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap', 'yap'])!
 		expect(apply(inYap, { type: 'rollover' }, inYap.endsAt!, [])!.callOpen).toBe(false)
 		expect(apply(inYap, { type: 'skip' }, T + 15_000, [])!.callOpen).toBe(false)
 	})
 
 	it('stays open while a yap break pauses and starts again', () => {
-		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap', 'yap'])!
 		const paused = apply(inYap, { type: 'pause' }, T + 12_000)!
 		expect(paused.callOpen).toBe(true)
 		expect(apply(paused, { type: 'start' }, T + 14_000)!.callOpen).toBe(true)
 	})
 
 	it('opens again on a jump back into a yap break, and closes on the way out', () => {
-		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap'])!
+		const inYap = apply(running(), { type: 'skip' }, T + 10_000, ['yap', 'yap'])!
 		const inWork = apply(inYap, { type: 'skip' }, T + 12_000, [])!
 		expect(inWork.callOpen).toBe(false)
 		const back = apply(inWork, { type: 'nudge', deltaMs: -60_000 }, T + 14_000, [])!

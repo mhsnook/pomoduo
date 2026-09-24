@@ -7,8 +7,9 @@ export const KIND_LABEL: Record<BreakKind, string> = { dance: '💃 Dance', yap:
 
 /**
  * The break vote: pick the kind of break this pomo ends in, and see how it
- * stands. Not picking is not a vote; a room that picks nothing gets a yap in
- * company, a dance alone.
+ * stands. Not picking is not a vote; a room that picks nothing gets a yap. A
+ * pick stands until its member changes it. Alone there is nothing to vote
+ * about, so there is no panel.
  */
 export function VotePanel({
 	clock,
@@ -26,13 +27,14 @@ export function VotePanel({
 	const { total, leader } = standing(votes, clock.tally)
 	const mine = members.find((m) => m.id === you)?.vote ?? null
 	const inBreak = clock.phase === 'break'
+	if (here.length < 2) return null
 
 	return (
 		<section data-testid="vote" className="font-ui flex flex-col gap-2">
 			<h2 className="font-display text-xl">Break vote</h2>
 			<p data-testid="break-kind" className="opacity-80">
 				{inBreak
-					? `This is a ${clock.breakKind} break. Picks now count for the next one.`
+					? `This is a ${clock.breakKind} break. Picks stand for the next one.`
 					: 'Pick what this pomo’s break should be.'}
 			</p>
 			<div className="join w-full">
@@ -61,9 +63,9 @@ export function VotePanel({
 				. {leader === 'dance' ? 'Dance' : 'Yap'} wins if work ends now.
 			</p>
 			<p className="text-xs opacity-60">
-				Saying nothing is not a vote. With nobody picking it is a{' '}
-				{defaultKind(here.length)} break, and a side that loses keeps its votes for next
-				time.
+				Saying nothing is not a vote: with nobody picking it is a{' '}
+				{defaultKind(here.length)} break. Your pick stays until you change it, and a side
+				that loses keeps its votes for next time.
 			</p>
 		</section>
 	)

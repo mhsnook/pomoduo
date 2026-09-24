@@ -22,6 +22,8 @@ function OnCall({ member }: { member: Member }) {
 /** Who is in the session, and what each of them is working on. */
 export function Members({ members, you }: { members: Member[]; you: string }) {
 	if (members.length === 0) return null
+	// a room of one holds no vote, so a pick left over from company is not shown
+	const voting = members.filter((m) => m.here).length > 1
 	// everyone else first, the ones here before the ones away; you come last
 	const sorted = [...members].sort(
 		(a, b) =>
@@ -53,7 +55,7 @@ export function Members({ members, you }: { members: Member[]; you: string }) {
 							<span className="font-bold">{displayName(member.name)}</span>
 							{member.id === you && <span className="opacity-60">you</span>}
 							<span className="ml-auto flex items-center gap-1.5">
-								{member.vote && (
+								{voting && member.vote && (
 									<span title={`picked ${member.vote} for this break`}>
 										{member.vote === 'dance' ? '💃' : '💬'}
 									</span>

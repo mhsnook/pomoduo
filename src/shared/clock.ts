@@ -242,15 +242,6 @@ export function apply(
 	}
 }
 
-/**
- * Whether this change ended work and started a break, which is when the vote
- * is taken. A jump back into the last break returns to it without a vote.
- */
-export const startsBreak = (before: Clock, after: Clock, command: Command) =>
-	before.phase === 'work' &&
-	after.phase === 'break' &&
-	!(command.type === 'nudge' && command.deltaMs < 0)
-
 /** Takes the clock out of a row, leaving behind the record of the change that made it. */
 export const clockOf = (row: ClockRow): Clock => ({
 	phase: row.phase,

@@ -1,3 +1,4 @@
+import type { WriteEvent } from 'party-db'
 import { definePartyCollection, isPartyDbRequest, PartyDbServer } from 'party-db/server'
 import type { Connection, ConnectionContext } from 'partyserver'
 import type { ZodType } from 'zod'
@@ -34,12 +35,23 @@ type SocketState = { memberId: string | null }
 /** Storage key: when the last device left, while nobody has come back. */
 const EMPTY_SINCE = 'emptySince'
 
+/**
+ * How long a member who has gone stays on the roster. Long enough to cover a
+ * reload, a crashed browser, and a break spent away from the desk; short
+ * enough that an afternoon carried on alone looks like one.
+ */
+const GONE_AFTER_MS = 10 * 60_000
+
+/** Finds the members who have gone. Both the dropping and the waking read it. */
+const AWAY = 'here = 0'
+
 /** Parses a member row out of SQLite, where booleans are integers and the mic is JSON. */
 const parseMember = (raw: Record<string, unknown>): Member =>
 	memberSchema.parse({
 		...raw,
 		here: Boolean(raw.here),
 		onCall: Boolean(raw.onCall),
+		listening: Boolean(raw.listening),
 		muted: Boolean(raw.muted),
 		mic: raw.mic ? JSON.parse(String(raw.mic)) : null,
 	})
@@ -53,6 +65,7 @@ const blankMember = (id: string, here: boolean): Member => ({
 	seenAt: Date.now(),
 	vote: null,
 	onCall: false,
+	listening: false,
 	muted: false,
 	mic: null,
 })
@@ -129,6 +142,7 @@ export class Session extends PartyDbServer<Env> {
 		this.addColumns('members', {
 			vote: 'TEXT',
 			onCall: 'INTEGER NOT NULL DEFAULT 0',
+			listening: 'INTEGER NOT NULL DEFAULT 0',
 			muted: 'INTEGER NOT NULL DEFAULT 0',
 			mic: 'TEXT',
 		})
@@ -215,6 +229,9 @@ export class Session extends PartyDbServer<Env> {
 
 	async onAlarm() {
 		await this.serially(async () => {
+			// Before the rollover, so a vote clearing does not write to rows this
+			// is about to delete.
+			await this.forgetTheGone()
 			await this.rollOver()
 			await this.endIfEmpty()
 			await this.schedule()
@@ -279,12 +296,17 @@ export class Session extends PartyDbServer<Env> {
 		})
 	}
 
-	/** One alarm covers both jobs: the end of a running phase, and the end of an empty session. */
+	/**
+	 * One alarm covers every job the room wakes for: the end of a running phase,
+	 * the moment the member away longest is forgotten, and the end of an empty
+	 * session.
+	 */
 	private async schedule() {
 		const clock = this.readClock()?.clock
 		const emptySince = await this.ctx.storage.get<number>(EMPTY_SINCE)
 		const times = [
 			clock?.endsAt ?? null,
+			this.forgetAt(),
 			emptySince !== undefined && clock ? emptySince + graceOf(clock) : null,
 		].filter((t): t is number => t !== null)
 		if (times.length === 0) await this.ctx.storage.deleteAlarm()
@@ -308,9 +330,10 @@ export class Session extends PartyDbServer<Env> {
 
 	/**
 	 * Writes one clock change and does what that change calls for: it clears the
-	 * votes when a break starts, and takes everyone off the call when the call
-	 * closes. Every command that changes the clock calls this, so a new
-	 * consequence goes here rather than into each command.
+	 * votes when a break starts, takes everyone off the call when the call
+	 * closes, and clears the roster when the session ends. Every command that
+	 * changes the clock calls this, so a new consequence goes here rather than
+	 * into each command.
 	 */
 	private async settle(
 		before: Clock,
@@ -327,7 +350,12 @@ export class Session extends PartyDbServer<Env> {
 		if (startsBreak(before, next, change.command))
 			await this.patchMembers('vote IS NOT NULL', { vote: null })
 		if (before.callOpen && !next.callOpen)
-			await this.patchMembers('onCall = 1', { onCall: false, mic: null })
+			await this.patchMembers('onCall = 1', {
+				onCall: false,
+				listening: false,
+				mic: null,
+			})
+		if (change.command.type === 'end') await this.dropMembers()
 		return row
 	}
 
@@ -370,21 +398,53 @@ export class Session extends PartyDbServer<Env> {
 	}
 
 	/** Makes the same change to every member the query finds, in one commit. */
-	private async patchMembers(where: string, patch: Partial<Member>) {
+	private async patchMembers(
+		where: string,
+		patch: Partial<Member>,
+		...binds: (string | number)[]
+	) {
 		const found = this.ctx.storage.sql
-			.exec(`SELECT * FROM members WHERE ${where}`)
+			.exec(`SELECT * FROM members WHERE ${where}`, ...binds)
 			.toArray()
 			.map(parseMember)
-		if (found.length === 0) return
-		await this.commit([
-			{
-				channel: 'members',
-				ops: found.map((member) => ({
-					type: 'update',
-					value: { ...member, ...patch },
-				})),
-			},
-		])
+		await this.commitMembers(
+			found.map((member) => ({ type: 'update', value: { ...member, ...patch } })),
+		)
+	}
+
+	/**
+	 * Takes every member the query finds off the roster, in one commit. Defaults
+	 * to all of them. A delete is carried out on the key alone, so these rows are
+	 * never parsed and the entry every device receives stays small.
+	 */
+	private async dropMembers(where = '1 = 1', ...binds: (string | number)[]) {
+		const found = this.ctx.storage.sql
+			.exec(`SELECT id FROM members WHERE ${where}`, ...binds)
+			.toArray()
+		await this.commitMembers(found.map((row) => ({ type: 'delete', value: row })))
+	}
+
+	/** Writes one batch of member changes, if there are any. */
+	private async commitMembers(ops: WriteEvent[]) {
+		if (ops.length === 0) return
+		await this.commit([{ channel: 'members', ops }])
+	}
+
+	/**
+	 * Takes the long gone off the roster. Away holds a member's place through a
+	 * reload or a walk to the kettle; past `GONE_AFTER_MS` it stops meaning that,
+	 * and a session carried on alone should look like one.
+	 */
+	private async forgetTheGone() {
+		await this.dropMembers(`${AWAY} AND seenAt <= ?`, Date.now() - GONE_AFTER_MS)
+	}
+
+	/** When the member away longest is forgotten, which is the next one to be. */
+	private forgetAt(): number | null {
+		const [row] = this.ctx.storage.sql
+			.exec(`SELECT MIN(seenAt) AS at FROM members WHERE ${AWAY}`)
+			.toArray()
+		return typeof row?.at === 'number' ? row.at + GONE_AFTER_MS : null
 	}
 
 	private readMember(id: string): Member | null {
@@ -415,7 +475,7 @@ export class Session extends PartyDbServer<Env> {
 			member,
 			here
 				? { ...member, here, seenAt }
-				: { ...member, here, seenAt, onCall: false, mic: null },
+				: { ...member, here, seenAt, onCall: false, listening: false, mic: null },
 		)
 	}
 
@@ -448,17 +508,25 @@ export class Session extends PartyDbServer<Env> {
 	// ---- the call ----
 
 	/** Records how one member sits on the call, and where the others pull their mic from. */
-	private async setVoice({ id, onCall, muted, mic }: Voice) {
+	private async setVoice({ id, onCall, listening, muted, mic }: Voice) {
 		const member = this.readMember(id)
 		if (
 			member &&
 			member.onCall === onCall &&
+			member.listening === listening &&
 			member.muted === muted &&
 			JSON.stringify(member.mic) === JSON.stringify(mic)
 		)
 			return
 		const base = member ?? blankMember(id, this.isHere(id))
-		await this.writeMember(member, { ...base, onCall, muted, mic, seenAt: Date.now() })
+		await this.writeMember(member, {
+			...base,
+			onCall,
+			listening,
+			muted,
+			mic,
+			seenAt: Date.now(),
+		})
 	}
 
 	// ---- tracks ----

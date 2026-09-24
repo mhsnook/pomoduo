@@ -7,3 +7,8 @@ worker-configuration.d.ts
 *.tsbuildinfo
 .DS_Store
 prototypes/
+
+# The base job checks head out here to measure both trees with head's check
+# scripts and tool configs. Gitignored so the linter and formatter skip it —
+# otherwise the base tree's report would count head's copies as its own.
+.ci-head/

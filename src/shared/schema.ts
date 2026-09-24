@@ -93,9 +93,14 @@ export const memberSchema = z.object({
 	vote: breakKind.nullable(),
 	/** Whether this member has picked the call up. */
 	onCall: z.boolean(),
+	/** Whether this member is on the call with no mic of their own: they hear, and say nothing. */
+	listening: z.boolean(),
 	/** Whether this member's mic is off while they are on the call. */
 	muted: z.boolean(),
-	/** Where the others pull this member's mic from, while they are on the call. */
+	/**
+	 * Where the others pull this member's mic from. Null while their track is
+	 * still coming up, and for good while they are listening.
+	 */
 	mic: micSchema.nullable(),
 })
 export type Member = z.infer<typeof memberSchema>
@@ -117,6 +122,7 @@ export const voteSchema = z.object({
 export const voiceSchema = z.object({
 	id: z.string().min(1).max(64),
 	onCall: z.boolean(),
+	listening: z.boolean(),
 	muted: z.boolean(),
 	mic: micSchema.nullable(),
 })

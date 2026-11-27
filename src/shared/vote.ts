@@ -39,6 +39,9 @@ export function standing(votes: Vote[], tally: Tally) {
 		yap: votes.filter((v) => v === 'yap').length,
 	}
 	const total = { dance: cast.dance + tally.bank.dance, yap: cast.yap + tally.bank.yap }
+	// A room of one has nothing to vote about, whatever its member last picked
+	// in company: a yap alone is nobody to talk to.
+	if (votes.length < 2) return { cast, total, leader: defaultKind(votes.length) }
 	// Level totals of nothing are a quiet room, not a tie: nobody has cast a
 	// vote or banked one, so there is no disagreement to take turns over.
 	const leader: BreakKind =
@@ -58,10 +61,12 @@ export function standing(votes: Vote[], tally: Tally) {
  * voted gets the kind that suits its size. The winner spends its bank. The
  * loser banks the votes it just cast, so a side that keeps losing gets its way
  * eventually. A member who did not pick has cast nothing, so they bank nothing
- * and they stand in nobody's way.
+ * and they stand in nobody's way. A room of one holds no vote at all, so its
+ * banks keep until there is company to spend them on.
  */
 export function decide(votes: Vote[], tally: Tally): { kind: BreakKind; tally: Tally } {
 	const { cast, leader: kind } = standing(votes, tally)
+	if (votes.length < 2) return { kind, tally }
 	const loser = otherKind(kind)
 	const bank = { [kind]: 0, [loser]: tally.bank[loser] + cast[loser] } as Tally['bank']
 	return { kind, tally: { bank, lastLoser: loser } }

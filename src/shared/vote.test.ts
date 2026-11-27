@@ -90,3 +90,21 @@ describe('saying nothing', () => {
 		expect(run(['dance', 'yap', null], 4)).toEqual(['dance', 'yap', 'dance', 'yap'])
 	})
 })
+
+describe('a room of one', () => {
+	it('gets a dance however its member voted, because a yap alone is nobody', () => {
+		expect(decide(['yap'], freshTally()).kind).toBe('dance')
+		expect(decide(['dance'], freshTally()).kind).toBe('dance')
+	})
+
+	it('holds no vote, so the banks keep until there is company', () => {
+		const banked: Tally = { bank: { dance: 0, yap: 2 }, lastLoser: 'yap' }
+		expect(decide(['yap'], banked).tally).toEqual(banked)
+	})
+
+	it('keeps the pick for when company comes back', () => {
+		// the pick lives on the member, not in the tally: nothing here clears it
+		const alone = decide(['yap'], freshTally())
+		expect(decide(['yap', 'yap'], alone.tally).kind).toBe('yap')
+	})
+})

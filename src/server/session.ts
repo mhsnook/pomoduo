@@ -3,14 +3,7 @@ import { definePartyCollection, isPartyDbRequest, PartyDbServer } from 'party-db
 import type { Connection, ConnectionContext } from 'partyserver'
 import type { ZodType } from 'zod'
 
-import {
-	apply,
-	type Clock,
-	clockOf,
-	type Command,
-	freshClock,
-	startsBreak,
-} from '../shared/clock'
+import { apply, type Clock, clockOf, type Command, freshClock } from '../shared/clock'
 import {
 	CLOCK_ROW_ID,
 	type ClockRow,
@@ -229,8 +222,8 @@ export class Session extends PartyDbServer<Env> {
 
 	async onAlarm() {
 		await this.serially(async () => {
-			// Before the rollover, so a vote clearing does not write to rows this
-			// is about to delete.
+			// Before the rollover, so settling it does not write to member rows
+			// this is about to delete.
 			await this.forgetTheGone()
 			await this.rollOver()
 			await this.endIfEmpty()
@@ -329,11 +322,11 @@ export class Session extends PartyDbServer<Env> {
 	}
 
 	/**
-	 * Writes one clock change and does what that change calls for: it clears the
-	 * votes when a break starts, takes everyone off the call when the call
-	 * closes, and clears the roster when the session ends. Every command that
-	 * changes the clock calls this, so a new consequence goes here rather than
-	 * into each command.
+	 * Writes one clock change and does what that change calls for: it takes
+	 * everyone off the call when the call closes, and clears the roster when the
+	 * session ends. Every command that changes the clock calls this, so a new
+	 * consequence goes here rather than into each command. A pick is not one of
+	 * them: it stands from one pomo to the next until its member changes it.
 	 */
 	private async settle(
 		before: Clock,
@@ -347,8 +340,6 @@ export class Session extends PartyDbServer<Env> {
 		},
 	): Promise<ClockRow> {
 		const row = await this.writeClock(previous, next, change)
-		if (startsBreak(before, next, change.command))
-			await this.patchMembers('vote IS NOT NULL', { vote: null })
 		if (before.callOpen && !next.callOpen)
 			await this.patchMembers('onCall = 1', {
 				onCall: false,

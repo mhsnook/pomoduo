@@ -65,10 +65,11 @@ the product; the pair is.
   intention, mic state, coarse presence. No idle or tab detection.
 - [The knock](rules.md#opening-voice-mid-pomo-the-knock): mid-work voice
   starts with a quiet knock the other side accepts or ignores.
-- [The break vote](rules.md#the-break-vote-and-its-bank): one vote each,
-  silence is not a vote, and a room that votes for nothing gets yap in company
-  and dance alone; the losing kind banks its votes, so everyone gets their way
-  eventually. Replaced the decay-factor weights.
+- [The break vote](rules.md#the-break-vote-and-its-bank): one vote each and it
+  stands until you change it, silence is not a vote, a room that votes for
+  nothing gets yap, and a room of one gets a dance without voting at all; the
+  losing kind banks its votes, so everyone gets their way eventually. Replaced
+  the decay-factor weights.
 - [Chat](rules.md#chat): live in any break and whenever the call is open;
   held otherwise, editable until it delivers.
 - [Ledger in a duo](user-stories.md#ledger-in-a-duo): pomos stay personal.

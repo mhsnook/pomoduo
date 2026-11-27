@@ -127,19 +127,28 @@ day. Counting it as a vote at all was the mistake: a member who said nothing
 cancelled out a member who had picked. A vote is a vote now, and silence is
 silence. What leans yap in company is the room nobody voted in at all: two
 people who say nothing about the break are there for each other, and a person
-alone has nobody to talk to.
+alone has nobody to talk to. Picks cleared every pomo until 2026-09-24, when
+they were made to stand: a duo that yaps every break should not have to say so
+every pomo. That is also why a room of one holds no vote — a pick left over
+from company would otherwise leave someone alone on a call with nobody, with no
+panel to take it back.
 
 - Each member who is here may cast one vote. Saying nothing is not a vote: it
   neither helps a kind nor stands in another member's way, and it banks
   nothing.
-- A room where nobody voted, and where neither kind has a bank, gets a yap
-  when more than one person is here and a dance when somebody is alone.
+- A room where nobody voted, and where neither kind has a bank, gets a yap.
+  Two people who say nothing about the break are there for each other.
 - Each kind has a bank. A kind's total is its votes plus its bank. The higher
   total wins. On a tie, the kind that lost last time wins, and dance wins the
   very first tie.
 - The winner spends its bank: it goes back to 0. The loser banks the votes it
   just cast, so a side that keeps losing keeps adding to its bank.
-- A vote lasts one pomo. Everyone's pick clears when the break starts.
+- A pick stands. It carries from one pomo to the next until the member changes
+  it or takes it back, because what you wanted last break is the best guess at
+  what you want this one.
+- A room of one holds no vote: its break is a dance whatever its member picked
+  in company, the banks keep, and the pick waits for company to count again.
+  Nobody sees the vote while they are alone.
 - The vote is taken when work ends by running out, by a skip, or by a jump
   past the end. A jump back into the last break returns to it without a vote.
 - The banks reset when a session ends.
@@ -150,7 +159,8 @@ What that does, with the same picks every pomo:
 | Room                 | Result                                    |
 | -------------------- | ----------------------------------------- |
 | Unanimous            | Always the same kind                      |
-| Nobody votes         | Yap every time, or dance on your own      |
+| Nobody votes         | Yap every time                            |
+| Anybody, alone       | Dance every time, and no vote is shown    |
 | One votes, one quiet | The kind that was voted for, every time   |
 | Two people, one each | Dance, yap, dance, yap                    |
 | Three people, 2-1    | The one gets their way every other break  |

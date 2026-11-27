@@ -43,7 +43,7 @@ export const Ledger = memo(function Ledger({
 	}
 
 	return (
-		<section data-testid="ledger" className="mt-auto flex min-h-0 flex-col gap-2.5">
+		<section data-testid="ledger" className="mt-auto flex flex-col gap-2.5">
 			{!browsing && (
 				<>
 					<LedgerHeading
@@ -71,7 +71,7 @@ export const Ledger = memo(function Ledger({
 					{past.length === 0 && (
 						<p className="text-side-muted text-[13px]">No earlier days yet.</p>
 					)}
-					<ol className="flex min-h-0 flex-col overflow-y-auto">
+					<ol className="flex flex-col">
 						{past.map((entry) => (
 							<li key={entry.day} className="border-side-rule border-t">
 								<button
@@ -169,7 +169,7 @@ function status(p: Pomo) {
 /** One line per pomo. The whole line opens it for editing; the times are on hover. */
 function PomoList({ pomos, onEdit }: { pomos: Pomo[]; onEdit: (pomo: Pomo) => void }) {
 	return (
-		<ol className="flex min-h-0 flex-col overflow-y-auto">
+		<ol className="flex flex-col">
 			{pomos.map((p) => {
 				const text = (p.end ? p.note || p.intention : p.intention).replace(
 					/\s*\n\s*/g,
@@ -182,11 +182,11 @@ function PomoList({ pomos, onEdit }: { pomos: Pomo[]; onEdit: (pomo: Pomo) => vo
 							type="button"
 							data-testid="ledger-edit"
 							id={`ledger-edit-${p.id}`}
-							aria-label={`Edit the pomo that started at ${fmtTime(p.start)}`}
 							title={`${fmtTime(p.start)} – ${p.end ? `${fmtTime(p.end)} · ${workedMinutes(p)}m` : 'now'}`}
 							onClick={() => onEdit(p)}
 							className="hover:bg-side-row flex w-full items-center gap-2.5 px-0.5 py-2 text-left"
 						>
+							<span className="sr-only">Edit the pomo: </span>
 							<span
 								className={cn(
 									'min-w-[42px] flex-none text-[12.5px] whitespace-nowrap tabular-nums',
@@ -214,6 +214,11 @@ function PomoList({ pomos, onEdit }: { pomos: Pomo[]; onEdit: (pomo: Pomo) => vo
 									'no intention'
 								)}
 							</span>
+							{p.end && (
+								<span className="text-side-muted flex-none text-xs tabular-nums">
+									{workedMinutes(p)}m
+								</span>
+							)}
 							<span className={cn('flex-none text-xs', className)}>{word}</span>
 						</button>
 					</li>

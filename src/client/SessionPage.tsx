@@ -579,10 +579,10 @@ function Session({
 	}
 
 	const today = workDayOf(new Date())
-	const ledgerToday = pomos.filter((p) => p.day === day)
+	// the open pomo can be filed under another day than the one the ledger shows
 	const pomoNumber = current
-		? ledgerToday.indexOf(current) + 1
-		: ledgerToday.filter((p) => p.end !== null).length + 1
+		? pomos.filter((p) => p.day === current.day).indexOf(current) + 1
+		: pomos.filter((p) => p.day === day && p.end !== null).length + 1
 	// enter puts you back to work, but will not start a break you stopped on purpose
 	const enterStarts = !running && (idle || phase === 'work')
 
@@ -789,7 +789,7 @@ function Session({
 					</section>
 				</div>
 
-				<aside className="flex min-w-0 flex-col gap-[26px] lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)] lg:self-start lg:border-l lg:border-current/20 lg:pl-6">
+				<aside className="flex min-w-0 flex-col gap-[26px] lg:sticky lg:top-2 lg:-mr-4 lg:h-[calc(100dvh-1rem)] lg:self-start lg:overflow-y-auto lg:border-l lg:border-current/20 lg:py-4 lg:pr-4 lg:pl-6">
 					{status === 'live' && (
 						<SideColumn
 							clock={clock}

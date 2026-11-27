@@ -26,6 +26,9 @@ synced through party-db.
 - Members change the room only through its own endpoints, never party-db's
   write path.
 - Unit tests cover pure modules: `*.test.ts` next to the module.
+- Information someone needs goes on the page or one tap away, never only in a
+  hover or a `title`. A hover never reaches a touch screen. A `title` may repeat
+  what the page already says.
 
 ## Gate
 

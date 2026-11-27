@@ -79,6 +79,39 @@
 		'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
 	--font-body:
 		'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+
+	/* The side column's palette, for work. Each break below repaints it by
+	   setting the same variables, which the utilities read at use. */
+	--color-side-row: #10222e;
+	--color-side-row-on: #10222e;
+	--color-side-pop: #10222e;
+	--color-side-edge: #1e3644;
+	--color-side-rule: #162c39;
+	--color-side-label: #7d97a4;
+	--color-side-muted: #6f8b99;
+	--color-side-text: #a8c0cc;
+	--color-side-strong: #e3eff5;
+	--color-side-link: #4f96c7;
+	--color-side-bar: #3d8fc4;
+	--color-side-done: #4f9a74;
+
+	/* Coral means one thing: someone is on the call and you are not. */
+	--color-call: #ff8c69;
+	--color-call-ink: #2a1208;
+	--color-call-ground: #2a1d18;
+	--color-call-edge: #5e3527;
+	--color-call-title: #ffb499;
+	--color-call-text: #f7e3da;
+	--color-call-soft: #c09884;
+	--color-call-notice: #3a2318;
+	--color-call-notice-edge: #6b4029;
+	--color-call-notice-text: #ffc9b1;
+
+	/* Mint is being on it. */
+	--color-on-call: #57d3ad;
+	--color-on-call-ink: #0d241d;
+	--color-on-call-ground: #17332c;
+	--color-on-call-title: #8fe4c8;
 }
 
 * {
@@ -112,7 +145,7 @@ body {
 /* ---- the page, lifted from pomodance ---- */
 
 .pomo {
-	--pomo-bg: #0b1f2a;
+	--pomo-bg: #0a1a24;
 	--pomo-fg: #e6f4f8;
 	--pomo-accent: #359fcc;
 	background: var(--pomo-bg);
@@ -126,6 +159,19 @@ body {
 	background: #7b2cbf;
 	position: relative;
 	isolation: isolate;
+	/* the dance floor moves under the side column, so its rows are see-through */
+	--color-side-row: rgb(0 0 0 / 0.18);
+	--color-side-row-on: rgb(0 0 0 / 0.3);
+	--color-side-pop: #3b2a52;
+	--color-side-edge: rgb(255 255 255 / 0.3);
+	--color-side-rule: rgb(255 255 255 / 0.2);
+	--color-side-label: rgb(255 255 255 / 0.85);
+	--color-side-muted: rgb(255 255 255 / 0.8);
+	--color-side-text: #fff;
+	--color-side-strong: #fff;
+	--color-side-link: var(--pomo-accent);
+	--color-side-bar: var(--pomo-accent);
+	--color-side-done: #b6f5d4;
 }
 
 /* the gradient lives on a pseudo-element so hue-rotate never tints the video or emoji */
@@ -320,8 +366,68 @@ body {
 
 /* A yap break has no music, so it has no dance floor either. */
 .pomo.is-break.is-yap {
-	--pomo-accent: #7ee0c3;
-	background: #1f3b3a;
+	--pomo-accent: #57d3ad;
+	background: #132a25;
+	--color-side-row: #162924;
+	--color-side-row-on: #1c3630;
+	--color-side-pop: #162924;
+	--color-side-edge: #26473f;
+	--color-side-rule: #1e3a33;
+	--color-side-label: #7fa398;
+	--color-side-muted: #7fa398;
+	--color-side-text: #cfe0da;
+	--color-side-strong: #e6f2ee;
+	--color-side-link: #57d3ad;
+	--color-side-bar: #57d3ad;
+	--color-side-done: #6fc39a;
+}
+
+/* ---- the side column ---- */
+
+/* The call is the only thing in the side column that moves, and only while
+   someone is on it without you. */
+.pomo-ringing {
+	animation: pomo-ring 2.2s ease-out infinite;
+}
+
+.pomo-breathe {
+	animation: pomo-breathe 1.3s ease-in-out infinite;
+}
+
+.pomo.is-calm .pomo-ringing,
+.pomo.is-calm .pomo-breathe {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pomo-ringing,
+	.pomo-breathe {
+		animation: none;
+	}
+}
+
+@keyframes pomo-ring {
+	0% {
+		box-shadow: 0 0 0 0 rgb(255 140 105 / 0.45);
+	}
+	70% {
+		box-shadow: 0 0 0 14px rgb(255 140 105 / 0);
+	}
+	100% {
+		box-shadow: 0 0 0 0 rgb(255 140 105 / 0);
+	}
+}
+
+@keyframes pomo-breathe {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.45;
+		transform: scale(0.82);
+	}
 }
 
 .pomo.is-break.is-yap::before {

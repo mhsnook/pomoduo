@@ -140,6 +140,8 @@ prose is made; what is left closes by building. See
 - The easter-egg UI for swapping word pairs.
 - History across sessions: does a pair have a shared past.
 - The share card and page chrome, carried from pomodance.
+- Whether an open call shows anywhere but the side column (the tab title, a
+  browser notification) for when pomoduo sits in a background tab.
 
 ## Out of scope
 

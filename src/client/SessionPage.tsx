@@ -21,12 +21,10 @@ import {
 	placeIn,
 } from '../shared/clock'
 import type { ClockRow } from '../shared/schema'
-import { CallPanel } from './components/CallPanel'
 import { Clock } from './components/Clock'
-import { Ledger } from './components/Ledger'
-import { Members } from './components/Members'
 import { PhaseVideo } from './components/PhaseVideo'
 import { EditPomoDialog, ReviewDialog } from './components/PomoDialogs'
+import { SideColumn } from './components/SideColumn'
 import {
 	clampMinutes,
 	IntentionInput,
@@ -35,7 +33,6 @@ import {
 	Toggle,
 	TransportButton,
 } from './components/ui'
-import { VotePanel } from './components/VotePanel'
 import { cn } from './lib/format'
 import {
 	byStart,
@@ -573,6 +570,8 @@ function Session({
 		setReview(null)
 	}
 
+	const focusIntention = () => document.getElementById('intention-input')?.focus()
+
 	const copyInvite = async () => {
 		await navigator.clipboard.writeText(location.href)
 		setCopied(true)
@@ -580,6 +579,10 @@ function Session({
 	}
 
 	const today = workDayOf(new Date())
+	const ledgerToday = pomos.filter((p) => p.day === day)
+	const pomoNumber = current
+		? ledgerToday.indexOf(current) + 1
+		: ledgerToday.filter((p) => p.end !== null).length + 1
 	// enter puts you back to work, but will not start a break you stopped on purpose
 	const enterStarts = !running && (idle || phase === 'work')
 
@@ -786,24 +789,24 @@ function Session({
 					</section>
 				</div>
 
-				<aside className="flex min-w-0 flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
-					<Members members={members} you={connection.memberId} />
+				<aside className="flex min-w-0 flex-col gap-[26px] lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)] lg:self-start lg:border-l lg:border-current/20 lg:pl-6">
 					{status === 'live' && (
-						<CallPanel
+						<SideColumn
 							clock={clock}
 							members={members}
 							you={connection.memberId}
 							serverNow={connection.serverNow}
 							onVoice={connection.voice}
+							onVote={(kind) => connection.vote(kind)}
+							onLonger={() => press({ type: 'stretch', deltaMs: STRETCH_MS })}
+							onSetIntention={isBreak ? undefined : focusIntention}
+							pomos={pomos}
+							day={day}
+							pomoNumber={pomoNumber}
+							showLedger={settings.showLedger}
+							onEditPomo={setEditing}
 						/>
 					)}
-					<VotePanel
-						clock={clock}
-						members={members}
-						you={connection.memberId}
-						onVote={(kind) => connection.vote(kind)}
-					/>
-					{settings.showLedger && <Ledger pomos={pomos} day={day} onEdit={setEditing} />}
 				</aside>
 			</div>
 

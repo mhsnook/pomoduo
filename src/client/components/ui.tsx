@@ -39,6 +39,15 @@ export function TransportButton({
 	)
 }
 
+/** The small capitals over each part of the side column. */
+export function SideHeading({ children }: { children: ReactNode }) {
+	return (
+		<h2 className="text-side-label text-xs font-bold tracking-[0.14em] uppercase">
+			{children}
+		</h2>
+	)
+}
+
 export function clampMinutes(v: string, fallback: number) {
 	const n = Number.parseInt(v, 10)
 	return Number.isFinite(n) && n > 0 ? Math.min(n, 180) : fallback

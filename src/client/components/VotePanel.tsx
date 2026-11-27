@@ -1,7 +1,7 @@
 import type { Clock } from '../../shared/clock'
 import type { Member } from '../../shared/schema'
 import { BREAK_KINDS, type BreakKind, defaultKind, standing } from '../../shared/vote'
-import { cn, displayName } from '../lib/format'
+import { cn } from '../lib/format'
 import { SideHeading } from './ui'
 
 const KIND_NAME: Record<BreakKind, string> = { dance: 'Dance', yap: 'Yap' }
@@ -50,11 +50,6 @@ export function VotePanel({
 	const mine = members.find((m) => m.id === you)?.vote ?? null
 	if (here.length < 2) return null
 
-	const pickedBy = (kind: BreakKind) =>
-		here
-			.filter((m) => m.vote === kind)
-			.map((m) => (m.id === you ? 'you' : displayName(m.name)))
-
 	return (
 		<section data-testid="vote" className="flex flex-col gap-2.5">
 			<div className="flex items-baseline justify-between gap-2">
@@ -82,7 +77,6 @@ export function VotePanel({
 			</div>
 			<div className="flex gap-2">
 				{BREAK_KINDS.map((kind) => {
-					const by = pickedBy(kind)
 					const yours = mine === kind
 					return (
 						<button
@@ -90,9 +84,6 @@ export function VotePanel({
 							type="button"
 							data-testid={`vote-${kind}`}
 							aria-pressed={yours}
-							title={
-								by.length > 0 ? `Picked by ${by.join(', ')}` : 'Nobody has picked this'
-							}
 							onClick={() => onVote(yours ? null : kind)}
 							className={cn(
 								'flex flex-1 flex-col items-center gap-0.5 rounded-[9px] border pt-[11px] pb-[9px]',

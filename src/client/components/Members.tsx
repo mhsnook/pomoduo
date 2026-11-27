@@ -43,43 +43,62 @@ function callLine(member: Member) {
 	return 'on the call · mic live'
 }
 
-/** Your own intention is set in the big box over the clock, which this jumps to. */
-function MemberLine({
+/** Where a member sits on the call, while it is open. */
+function CallLine({
 	member,
 	isYou,
-	callOpen,
 	othersOnCall,
-	onSetIntention,
 }: {
 	member: Member
 	isYou: boolean
-	callOpen: boolean
 	othersOnCall: boolean
-	onSetIntention?: () => void
 }) {
-	if (callOpen && member.onCall)
+	if (member.onCall)
 		return (
 			<span className={cn('text-[13px]', isYou ? 'text-side-text' : 'text-on-call')}>
 				{callLine(member)}
 			</span>
 		)
-	if (callOpen)
+	return (
+		<span
+			className={cn(
+				'text-[13px]',
+				isYou && othersOnCall ? 'text-call' : 'text-side-muted',
+			)}
+		>
+			{isYou ? 'not on the call yet' : 'not on the call'}
+		</span>
+	)
+}
+
+/**
+ * What a member is working on. Your own is set in the big box over the clock,
+ * which this jumps to. While the call is open an empty one says nothing, so
+ * the call line has the row.
+ */
+function IntentionLine({
+	member,
+	isYou,
+	callOpen,
+	onSetIntention,
+}: {
+	member: Member
+	isYou: boolean
+	callOpen: boolean
+	onSetIntention?: () => void
+}) {
+	if (member.intention)
 		return (
 			<span
 				className={cn(
-					'text-[13px]',
-					isYou && othersOnCall ? 'text-call' : 'text-side-muted',
+					'text-pretty',
+					callOpen ? 'text-side-muted text-[13px]' : 'text-side-text text-sm',
 				)}
 			>
-				{isYou ? 'not on the call yet' : 'not on the call'}
-			</span>
-		)
-	if (member.intention)
-		return (
-			<span className="text-side-text text-sm text-pretty" title={member.intention}>
 				{member.intention}
 			</span>
 		)
+	if (callOpen) return null
 	if (isYou && onSetIntention)
 		return (
 			<button
@@ -95,8 +114,8 @@ function MemberLine({
 }
 
 /**
- * Who is in the session. While working, each row carries that member's
- * intention; while the call is open, where they sit on it.
+ * Who is in the session: each member's intention and pick, and while the call
+ * is open, where they sit on it.
  */
 export function Members({
 	members,
@@ -115,6 +134,8 @@ export function Members({
 	const here = members.filter((m) => m.here)
 	const onCall = here.filter((m) => m.onCall)
 	const othersOnCall = onCall.some((m) => m.id !== you)
+	// a room of one holds no vote, so a pick left over from company is not shown
+	const voting = here.length > 1
 	// everyone else first, the ones here before the ones away; you come last
 	const sorted = [...members].sort(
 		(a, b) =>
@@ -157,14 +178,24 @@ export function Members({
 									</span>
 									{isYou && <span className="text-side-muted text-xs">you</span>}
 									{!member.here && <span className="text-side-muted text-xs">away</span>}
+									{voting && member.vote && (
+										<span
+											data-testid="member-pick"
+											className="text-side-muted ml-auto text-xs"
+										>
+											picked {member.vote}
+										</span>
+									)}
 								</span>
-								<MemberLine
+								<IntentionLine
 									member={member}
 									isYou={isYou}
 									callOpen={callOpen}
-									othersOnCall={othersOnCall}
 									onSetIntention={onSetIntention}
 								/>
+								{callOpen && (
+									<CallLine member={member} isYou={isYou} othersOnCall={othersOnCall} />
+								)}
 							</div>
 						</li>
 					)

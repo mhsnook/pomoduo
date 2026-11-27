@@ -26,6 +26,7 @@ so rather than pretending. The ledger lives on the device it was filed on.
 ---
 
 This folder describes what the app does today.
-[`architecture.md`](architecture.md) is how. The theory, the open questions,
+[`architecture.md`](architecture.md) is how, and
+[`state-machines.md`](state-machines.md) is every state the app moves through. The theory, the open questions,
 and everything not built yet live in [`tree/`](../tree/readme.md), and the
 vocabulary lives in [`CONTEXT.md`](../CONTEXT.md).

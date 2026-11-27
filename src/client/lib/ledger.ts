@@ -85,9 +85,6 @@ export function lastUnreviewed(pomos: Pomo[], day: string): Pomo | null {
 	return last?.end && !last.confirmed && last.day === day ? last : null
 }
 
-/**
- * The pomo a fresh start should offer to pick up rather than replace: one that
-
 /** The fields of a pomo as its edit form holds them, all as plain input strings. */
 export type PomoDraft = {
 	day: string
@@ -130,11 +127,11 @@ export function draftError(draft: PomoDraft, otherOpen = false): string | null {
 	return end < start ? 'That pomo would end before it started.' : null
 }
 
-/** An empty end puts the pomo back in progress, which is how two get merged by hand. */
 /**
  * The pomo as the form left it. Times the form did not change keep their
  * seconds and the worked time. Times it did change are what the ledger counts
- * from then on.
+ * from then on. An empty end puts the pomo back in progress, which is how two
+ * get merged by hand.
  */
 export function pomoFromDraft(pomo: Pomo, draft: PomoDraft): Pomo {
 	const same = draftOf(pomo)

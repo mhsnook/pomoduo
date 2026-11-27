@@ -35,6 +35,7 @@ its own endpoints.
 | `GET .../time`     | Answers with server time, for a device's first sync       |
 | `POST .../command` | Applies one clock command and answers with the new row    |
 | `POST .../member`  | Sets a member's name and intention                        |
+| `POST .../vote`    | Sets a member's pick for the break vote, or clears it     |
 | `POST .../voice`   | Sets a member's place on the call, and where their mic is |
 | `POST .../track`   | Records a video's length, if nobody has yet               |
 
@@ -70,7 +71,8 @@ client run it. A command is applied with `apply(clock, command, now)`:
 or a rollover ends work, `apply` takes one vote per member who is here and
 decides the break's kind from the votes and the banks in the clock row. The
 room counts the members it has marked here; a device predicting the same
-change counts the members it has. The room clears every pick after the vote.
+change counts the members it has. A pick stands from one pomo to the next
+until its member changes it.
 
 ## The call
 
@@ -105,7 +107,8 @@ member who leaves the session comes off the call with them.
   when it is more than 100 ms off. It never reads the wall clock.
 - **What it shows.** The room's clock, except that the device's own press
   shows at once. Its timer keeps that prediction until every press it made is
-  answered, then takes the room's version.
+  answered, then takes the room's version. A change from another member that
+  arrives in between shows at once, without the presses still on the way.
 - **Joining.** The device waits for the clock, the members, and the track
   lengths, then puts both playlists where the clock says: the current one at
   the clock's place, the other where it stopped.

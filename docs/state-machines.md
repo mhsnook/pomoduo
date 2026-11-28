@@ -149,8 +149,8 @@ stateDiagram-v2
 - On the device, being on the call is worked out each render:
   `callOpen && !hungUp && (answered || (mic allowed && phase is break))`.
   When the call opens or closes, every per-call flag resets.
-- Hung up looks the same as open and not on. It differs in one way: it stops
-  a break's call from joining on its own.
+- Open and not on rings while another member is on the call. Hung up does
+  not ring, and it stops a break's call from joining on its own.
 - After 10 seconds coming up, the device says its mic has not reached the
   other side.
 - Mute is separate from all of these and carries from one call to the next.

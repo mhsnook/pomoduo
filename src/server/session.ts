@@ -216,7 +216,10 @@ export class Session extends PartyDbServer<Env> {
 		const parsed = schema.safeParse(await req.json().catch(() => null))
 		if (!parsed.success)
 			return Response.json({ error: parsed.error.message }, { status: 400 })
-		await this.serially(() => run(parsed.data))
+		await this.serially(async () => {
+			await run(parsed.data)
+			await this.schedule()
+		})
 		return new Response(null, { status: 204 })
 	}
 

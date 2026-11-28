@@ -146,6 +146,14 @@ describe('presence', () => {
 		expect(await member('ben')).toMatchObject({ here: false, muted: true })
 	})
 
+	it('drops a member who arrived away, once ten minutes pass', async () => {
+		await join('ana')
+		expect(await member('ana')).toMatchObject({ here: false })
+		expect(await alarm()).toBe(T + 10 * MIN)
+		await runAlarm()
+		expect(await members()).toEqual([])
+	})
+
 	it('keeps a member here while any of their sockets is open, and marks them away when the last closes', async () => {
 		const phone = await connect('ana')
 		const laptop = await connect('ana')

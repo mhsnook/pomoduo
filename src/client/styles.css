@@ -87,8 +87,7 @@
 	--color-side-pop: #10222e;
 	--color-side-edge: #1e3644;
 	--color-side-rule: #162c39;
-	--color-side-label: #7d97a4;
-	--color-side-muted: #6f8b99;
+	--color-side-muted: #7d97a4;
 	--color-side-text: #a8c0cc;
 	--color-side-strong: #e3eff5;
 	--color-side-link: #4f96c7;
@@ -155,18 +154,20 @@ body {
 
 .pomo.is-break {
 	--pomo-fg: #fff;
-	--pomo-accent: #ffe14d;
-	background: #7b2cbf;
 	position: relative;
 	isolation: isolate;
+}
+
+.pomo.is-dance {
+	--pomo-accent: #ffe14d;
+	background: #7b2cbf;
 	/* the dance floor moves under the side column, so its rows are see-through */
 	--color-side-row: rgb(0 0 0 / 0.18);
 	--color-side-row-on: rgb(0 0 0 / 0.3);
 	--color-side-pop: #3b2a52;
 	--color-side-edge: rgb(255 255 255 / 0.3);
 	--color-side-rule: rgb(255 255 255 / 0.2);
-	--color-side-label: rgb(255 255 255 / 0.85);
-	--color-side-muted: rgb(255 255 255 / 0.8);
+	--color-side-muted: rgb(255 255 255 / 0.85);
 	--color-side-text: #fff;
 	--color-side-strong: #fff;
 	--color-side-link: var(--pomo-accent);
@@ -175,7 +176,7 @@ body {
 }
 
 /* the gradient lives on a pseudo-element so hue-rotate never tints the video or emoji */
-.pomo.is-break::before {
+.pomo.is-dance::before {
 	content: '';
 	position: fixed;
 	inset: 0;
@@ -241,14 +242,14 @@ body {
 	box-shadow: 0 0 0 4px color-mix(in oklab, var(--pomo-accent) 25%, transparent);
 }
 
-.pomo.is-break .pomo-clock {
+.pomo.is-dance .pomo-clock {
 	animation: pomo-wobble 0.6s ease-in-out infinite alternate;
 	text-shadow:
 		4px 4px 0 #7b2cbf,
 		-4px -4px 0 #2ec4b6;
 }
 
-.pomo.is-break .pomo-video-main {
+.pomo.is-dance .pomo-video-main {
 	animation: pomo-tilt 1.2s ease-in-out infinite alternate;
 }
 
@@ -335,22 +336,22 @@ body {
 	}
 }
 
-.pomo.is-break.is-calm {
+.pomo.is-dance.is-calm {
 	--pomo-accent: #ffd166;
 	background: #3b2a52;
 }
 
 /* content:none removes the gradient layer outright, so it needs no animation reset */
-.pomo.is-break.is-calm::before {
+.pomo.is-dance.is-calm::before {
 	content: none;
 }
 
-.pomo.is-break.is-calm .pomo-clock {
+.pomo.is-dance.is-calm .pomo-clock {
 	animation: none;
 	text-shadow: none;
 }
 
-.pomo.is-break.is-calm .pomo-video-main,
+.pomo.is-dance.is-calm .pomo-video-main,
 .pomo.is-calm .pomo-dancers span,
 .pomo.is-calm .pomo-ringing::after,
 .pomo.is-calm .pomo-breathe {
@@ -358,9 +359,9 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.pomo.is-break::before,
-	.pomo.is-break .pomo-clock,
-	.pomo.is-break .pomo-video-main,
+	.pomo.is-dance::before,
+	.pomo.is-dance .pomo-clock,
+	.pomo.is-dance .pomo-video-main,
 	.pomo-dancers span,
 	.pomo-ringing::after,
 	.pomo-breathe {
@@ -369,7 +370,7 @@ body {
 }
 
 /* A yap break has no music, so it has no dance floor either. */
-.pomo.is-break.is-yap {
+.pomo.is-yap {
 	--pomo-accent: #57d3ad;
 	background: #132a25;
 	--color-side-row: #162924;
@@ -377,7 +378,6 @@ body {
 	--color-side-pop: #162924;
 	--color-side-edge: #26473f;
 	--color-side-rule: #1e3a33;
-	--color-side-label: #7fa398;
 	--color-side-muted: #7fa398;
 	--color-side-text: #cfe0da;
 	--color-side-strong: #e6f2ee;
@@ -388,10 +388,10 @@ body {
 
 /* ---- the side column ---- */
 
-/* The call is the only thing in the side column that moves, and only while
-   someone is on it without you. The ripple is a layer behind the block that
-   grows and fades, so it runs on the compositor; the column keeps room around
-   the block for it to grow into. */
+/* The call is the only thing in the side column that moves, and only while it
+   rings (see `ringing` in session/call.tsx). The pulse is a glow inside the
+   block's own edge that fades in and out, so it needs no room around the block
+   and runs on the compositor. */
 .pomo-ringing {
 	position: relative;
 }
@@ -399,10 +399,11 @@ body {
 .pomo-ringing::after {
 	content: '';
 	position: absolute;
-	inset: -1px;
-	z-index: -1;
+	inset: 0;
 	border-radius: inherit;
-	background: var(--color-call);
+	box-shadow:
+		inset 0 0 0 1px var(--color-call),
+		inset 0 0 22px color-mix(in srgb, var(--color-call) 45%, transparent);
 	opacity: 0;
 	pointer-events: none;
 	animation: pomo-ring 2.2s ease-out infinite;
@@ -414,13 +415,11 @@ body {
 
 @keyframes pomo-ring {
 	0% {
-		opacity: 0.45;
-		transform: scale(1);
+		opacity: 1;
 	}
 	70%,
 	100% {
 		opacity: 0;
-		transform: scale(1.08, 1.12);
 	}
 }
 
@@ -434,14 +433,4 @@ body {
 		opacity: 0.45;
 		transform: scale(0.82);
 	}
-}
-
-.pomo.is-break.is-yap::before {
-	content: none;
-}
-
-.pomo.is-break.is-yap .pomo-clock,
-.pomo.is-break.is-yap .pomo-video-main {
-	animation: none;
-	text-shadow: none;
 }

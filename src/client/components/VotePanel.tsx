@@ -47,7 +47,7 @@ export function VotePanel({
 	onVote: (kind: BreakKind | null) => void
 }) {
 	if (here < 2) return null
-	const { total } = vote
+	const { cast } = vote
 
 	return (
 		<section data-testid="vote" className="flex flex-col gap-2.5">
@@ -55,16 +55,24 @@ export function VotePanel({
 				<SideHeading>
 					{clock.phase === 'break' ? 'Next break will be' : 'This break will be'}
 				</SideHeading>
-				<details className="dropdown dropdown-end">
-					<summary
-						data-testid="vote-rules"
-						aria-label="How the vote works"
-						title="How the vote works"
-						className="border-side-edge text-side-muted flex size-4 cursor-pointer list-none items-center justify-center rounded-full border text-[10px]"
-					>
-						?
-					</summary>
-					<div className="dropdown-content bg-side-pop border-side-edge text-side-text z-20 mt-2 flex w-64 flex-col gap-2 rounded-lg border p-3 text-xs shadow-lg">
+				<button
+					type="button"
+					data-testid="vote-rules"
+					aria-label="How the vote works"
+					popoverTarget="vote-rules-text"
+					style={{ anchorName: '--vote-rules' }}
+					className="border-side-edge text-side-muted flex size-4 cursor-pointer items-center justify-center rounded-full border text-[10px]"
+				>
+					?
+				</button>
+				<div
+					id="vote-rules-text"
+					popover="auto"
+					style={{ positionAnchor: '--vote-rules' }}
+					className="dropdown dropdown-end bg-side-pop border-side-edge text-side-text mt-2 w-64 rounded-lg border p-3 text-xs shadow-lg"
+				>
+					{/* the layout sits inside: a display class on the popover itself would keep it open */}
+					<div className="flex flex-col gap-2">
 						<p>
 							Saying nothing is not a vote. With nobody picking it is a{' '}
 							{defaultKind(here)} break.
@@ -75,7 +83,7 @@ export function VotePanel({
 							eventually.
 						</p>
 					</div>
-				</details>
+				</div>
 			</div>
 			<div className="flex gap-2">
 				{BREAK_KINDS.map((kind) => {
@@ -103,7 +111,7 @@ export function VotePanel({
 									yours ? 'text-side-link' : 'text-side-muted',
 								)}
 							>
-								{yours ? `${total[kind]} · yours` : picks(total[kind])}
+								{yours ? `${cast[kind]} · yours` : picks(cast[kind])}
 							</span>
 						</button>
 					)

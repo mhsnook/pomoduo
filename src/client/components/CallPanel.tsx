@@ -5,6 +5,7 @@ import { cn, displayName } from '../lib/format'
 import { MIC_DENIED } from '../lib/mic'
 import type { CallState } from '../session/call'
 import { Avatar } from './Members'
+import { SideHeading } from './ui'
 
 const listNames = (names: string[]) =>
 	names.length < 3
@@ -79,7 +80,7 @@ function OnCallControls({ call }: { call: CallState }) {
 				<Title dot="bg-on-call" className="text-on-call-title">
 					On the call
 				</Title>
-				<span className="text-side-label text-[13px]">
+				<span className="text-side-muted text-[13px]">
 					{call.onCount} of {call.onCount + call.waitingOn.length}
 				</span>
 			</div>
@@ -133,25 +134,40 @@ function OnCallControls({ call }: { call: CallState }) {
 	)
 }
 
-/** Who is on the call and who it is waiting on, and your way on. */
+/**
+ * Who is on the call and who it is waiting on, and your way on. It names who
+ * is on it whether or not it rings: after you hang up it stops ringing, but
+ * the others are still there.
+ */
 function JoinControls({ call, you }: { call: CallState; you: string }) {
 	return (
 		<>
 			<Title
-				dot={call.ringing ? 'bg-call pomo-breathe' : 'bg-side-label'}
-				className={call.ringing ? 'text-call-title' : 'text-side-label'}
+				dot={call.ringing ? 'bg-call pomo-breathe' : 'bg-side-muted'}
+				className={call.ringing ? 'text-call-title' : 'text-side-muted'}
 			>
 				The call is open
 			</Title>
-			{call.ringing ? (
+			{call.others.length > 0 ? (
 				<div className="flex items-center gap-2.5">
 					<Avatar member={call.others[0]} large />
 					<div className="flex min-w-0 flex-col gap-px">
-						<p data-testid="call-state" className="text-call-text text-base font-medium">
+						<p
+							data-testid="call-state"
+							className={cn(
+								'text-base font-medium',
+								call.ringing ? 'text-call-text' : 'text-side-strong',
+							)}
+						>
 							{listNames(call.others.map((m) => displayName(m.name)))}{' '}
 							{call.others.length > 1 ? 'are' : 'is'} on it
 						</p>
-						<span className="text-call-soft text-[13px]">
+						<span
+							className={cn(
+								'text-[13px]',
+								call.ringing ? 'text-call-soft' : 'text-side-muted',
+							)}
+						>
 							waiting on{' '}
 							{listNames(
 								call.waitingOn.map((m) => (m.id === you ? 'you' : displayName(m.name))),
@@ -193,15 +209,10 @@ function Title({
 	className: string
 }) {
 	return (
-		<p
-			className={cn(
-				'flex items-center gap-2 text-[13px] font-bold tracking-[0.12em] uppercase',
-				className,
-			)}
-		>
+		<SideHeading className={cn('flex items-center gap-2', className)}>
 			<span aria-hidden className={cn('size-2 shrink-0 rounded-full', dot)} />
 			{children}
-		</p>
+		</SideHeading>
 	)
 }
 

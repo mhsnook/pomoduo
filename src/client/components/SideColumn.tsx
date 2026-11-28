@@ -1,7 +1,7 @@
 import type { Clock } from '../../shared/clock'
 import type { Member } from '../../shared/schema'
 import { type BreakKind, standing } from '../../shared/vote'
-import { useCall, type VoiceState } from '../session/call'
+import type { CallState } from '../session/call'
 import { CallPanel, MicAsk } from './CallPanel'
 import { Members } from './Members'
 import { PhaseProgress } from './PhaseProgress'
@@ -9,15 +9,14 @@ import { VotePanel } from './VotePanel'
 
 /**
  * The live part of the column beside the clock: the call on top while it is
- * open, then the phase's progress, who is here, and the vote. It holds this
- * device's side of the call, so it is mounted for as long as the session is live.
+ * open, then the phase's progress, who is here, and the vote.
  */
 export function SideColumn({
 	clock,
 	members,
 	you,
 	serverNow,
-	onVoice,
+	call,
 	onVote,
 	onLonger,
 	onSetIntention,
@@ -27,13 +26,12 @@ export function SideColumn({
 	members: Member[]
 	you: string
 	serverNow: () => number
-	onVoice: (state: VoiceState) => void
+	call: CallState
 	onVote: (kind: BreakKind | null) => void
 	onLonger: () => void
 	onSetIntention: () => void
 	pomoNumber: number
 }) {
-	const call = useCall({ clock, members, you, serverNow, onVoice })
 	const here = members.filter((m) => m.here)
 	const vote = standing(
 		here.map((m) => m.vote),
@@ -66,7 +64,6 @@ export function SideColumn({
 				mine={members.find((m) => m.id === you)?.vote ?? null}
 				onVote={onVote}
 			/>
-			{call.audio}
 		</>
 	)
 }

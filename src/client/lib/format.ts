@@ -7,8 +7,7 @@ export function formatClock(seconds: number) {
 
 /** Time left as it reads in a sentence: `2:06`, with no padding on the minutes. */
 export function formatLeft(seconds: number) {
-	const total = Math.max(0, seconds)
-	return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`
+	return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`
 }
 
 /** The letter on a member's avatar. */

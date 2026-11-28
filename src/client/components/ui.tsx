@@ -42,11 +42,11 @@ export function TransportButton({
 /** The small capitals over each part of the side column. */
 export function SideHeading({
 	children,
-	className = 'text-side-label',
+	className = 'text-side-muted',
 	testId,
 }: {
 	children: ReactNode
-	/** The colour, which is the only thing a heading varies. */
+	/** The colour, and the layout of anything set beside the words. */
 	className?: string
 	testId?: string
 }) {

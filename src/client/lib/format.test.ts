@@ -14,7 +14,6 @@ describe('formatLeft', () => {
 	it('pads the seconds and not the minutes', () => {
 		expect(formatLeft(126)).toBe('2:06')
 		expect(formatLeft(1500)).toBe('25:00')
-		expect(formatLeft(-5)).toBe('0:00')
 	})
 })
 

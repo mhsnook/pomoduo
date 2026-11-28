@@ -57,7 +57,10 @@ export type CallState = {
 	waitingOn: Member[]
 	/** How many members here are on the call, you counted by this device rather than the room. */
 	onCount: number
-	/** Someone else is on the call and you are not: the one state that rings. */
+	/**
+	 * Someone else is on the call and you are not, and you have not hung up on
+	 * it: the one state that rings.
+	 */
 	ringing: boolean
 	muted: boolean
 	/** On the call, but this device's side of it has not come up yet. */
@@ -191,7 +194,7 @@ export function useCall({
 		others,
 		waitingOn,
 		onCount: others.length + Number(onCall),
-		ringing: callOpen && !onCall && others.length > 0,
+		ringing: callOpen && !onCall && !hungUp && others.length > 0,
 		muted,
 		waiting,
 		listening: isListening,

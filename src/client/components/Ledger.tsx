@@ -47,12 +47,11 @@ export const Ledger = memo(function Ledger({
 						title={`${day === today ? 'Today' : dayLabel(day)} · ${summarize(filed)}`}
 						action={
 							<SideLink
-								id="pomo-history"
-								testId="history-button"
-								title="Past days"
+								id="past-days-open"
+								testId="past-days-open"
 								onClick={() => setBrowsing(true)}
 							>
-								History
+								Past days
 							</SideLink>
 						}
 					/>
@@ -62,7 +61,7 @@ export const Ledger = memo(function Ledger({
 
 			{browsing && !viewing && (
 				<>
-					<LedgerHeading title="Past days" action={<CloseHistory onClick={close} />} />
+					<LedgerHeading title="Past days" action={<ClosePastDays onClick={close} />} />
 					{past.length === 0 && (
 						<p className="text-side-muted text-[13px]">No earlier days yet.</p>
 					)}
@@ -71,8 +70,8 @@ export const Ledger = memo(function Ledger({
 							<li key={entry.day} className="border-side-rule border-t">
 								<button
 									type="button"
-									id={`history-day-${entry.day}`}
-									data-testid="history-day"
+									id={`past-day-${entry.day}`}
+									data-testid="past-day"
 									onClick={() => setOpenDay(entry.day)}
 									className="hover:bg-side-row flex w-full items-baseline justify-between gap-2 px-0.5 py-2 text-left"
 								>
@@ -93,8 +92,8 @@ export const Ledger = memo(function Ledger({
 						title={`${dayLabel(viewing.day)} · ${summarize(viewing.pomos)}`}
 						back={
 							<SideLink
-								id="history-back"
-								testId="history-back"
+								id="past-days-back"
+								testId="past-days-back"
 								label="Back to the list of past days"
 								title="All past days"
 								onClick={() => setOpenDay(null)}
@@ -102,7 +101,7 @@ export const Ledger = memo(function Ledger({
 								‹
 							</SideLink>
 						}
-						action={<CloseHistory onClick={close} />}
+						action={<ClosePastDays onClick={close} />}
 					/>
 					<PomoList pomos={viewing.pomos} onEdit={onEdit} />
 				</>
@@ -137,12 +136,12 @@ function LedgerHeading({
 	)
 }
 
-function CloseHistory({ onClick }: { onClick: () => void }) {
+function ClosePastDays({ onClick }: { onClick: () => void }) {
 	return (
 		<SideLink
-			id="history-close"
-			testId="history-close"
-			label="Close the history and go back to today"
+			id="past-days-close"
+			testId="past-days-close"
+			label="Close the past days and go back to today"
 			title="Back to today"
 			onClick={onClick}
 		>

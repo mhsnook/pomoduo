@@ -12,6 +12,7 @@ import {
 	pauseWork,
 	type Pomo,
 	pomoFromDraft,
+	pomoNumberOf,
 	resolveDay,
 	resumeWork,
 	straddlesRollover,
@@ -253,5 +254,30 @@ describe('worked time', () => {
 	it('drops a pomo that ran under a minute, however long it sat paused', () => {
 		const paused = pauseWork(resumeWork(pomoAt(t0, null), t0), t0 + 30_000)
 		expect(isThrowaway(paused, t0 + 20 * 60_000)).toBe(true)
+	})
+})
+
+describe('pomoNumberOf', () => {
+	const morning = new Date(2026, 8, 16, 9, 0).getTime()
+	const day = workDayOf(new Date(morning))
+
+	it('counts the open pomo among its own day', () => {
+		const pomos = [pomoAt(morning, WORK_MS), pomoAt(morning + 2 * WORK_MS, null)]
+		expect(pomoNumberOf(pomos, day)).toBe(2)
+	})
+
+	it('gives the next number when nothing is open', () => {
+		const pomos = [pomoAt(morning, WORK_MS), pomoAt(morning + 2 * WORK_MS, WORK_MS)]
+		expect(pomoNumberOf(pomos, day)).toBe(3)
+	})
+
+	it('counts an open pomo filed under another day within that day', () => {
+		const yesterday = morning - 24 * 3_600_000
+		const pomos = [
+			pomoAt(yesterday, WORK_MS),
+			pomoAt(yesterday + 2 * WORK_MS, null),
+			pomoAt(morning, WORK_MS),
+		]
+		expect(pomoNumberOf(pomos, day)).toBe(2)
 	})
 })

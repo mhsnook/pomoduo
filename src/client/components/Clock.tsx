@@ -4,16 +4,8 @@ import type { Clock as ClockState } from '../../shared/clock'
 import { formatClock } from '../lib/format'
 import { secondsOf } from '../lib/server-time'
 
-/** The big countdown, lifted from pomodance. It reads server time, never the wall clock. */
-export function Clock({
-	clock,
-	serverNow,
-	isBreak,
-}: {
-	clock: ClockState
-	serverNow: () => number
-	isBreak: boolean
-}) {
+/** The whole seconds left on the clock, by server time, ticking while it runs. */
+export function useClockSeconds(clock: ClockState, serverNow: () => number) {
 	const [seconds, setSeconds] = useState(() => secondsOf(clock, serverNow()))
 
 	useEffect(() => {
@@ -24,7 +16,20 @@ export function Clock({
 		return () => clearInterval(id)
 	}, [clock, serverNow])
 
-	const text = formatClock(seconds)
+	return seconds
+}
+
+/** The big countdown, lifted from pomodance. It reads server time, never the wall clock. */
+export function Clock({
+	clock,
+	serverNow,
+	isBreak,
+}: {
+	clock: ClockState
+	serverNow: () => number
+	isBreak: boolean
+}) {
+	const text = formatClock(useClockSeconds(clock, serverNow))
 	useEffect(() => {
 		document.title = `${text} ${isBreak ? '💃' : '🍅'} pomoduo`
 	}, [text, isBreak])

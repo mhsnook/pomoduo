@@ -21,12 +21,11 @@ import {
 	placeIn,
 } from '../shared/clock'
 import type { ClockRow } from '../shared/schema'
-import { CallPanel } from './components/CallPanel'
 import { Clock } from './components/Clock'
 import { Ledger } from './components/Ledger'
-import { Members } from './components/Members'
 import { PhaseVideo } from './components/PhaseVideo'
 import { EditPomoDialog, ReviewDialog } from './components/PomoDialogs'
+import { SideColumn } from './components/SideColumn'
 import {
 	clampMinutes,
 	IntentionInput,
@@ -35,7 +34,6 @@ import {
 	Toggle,
 	TransportButton,
 } from './components/ui'
-import { VotePanel } from './components/VotePanel'
 import { cn } from './lib/format'
 import {
 	byStart,
@@ -47,6 +45,7 @@ import {
 	loadIntention,
 	pauseWork,
 	type Pomo,
+	pomoNumberOf,
 	readPomos,
 	resolveDay,
 	resumeWork,
@@ -60,6 +59,7 @@ import { placeToTrack } from './lib/playlist'
 import { loadSettings, type Settings, saveSettings } from './lib/settings'
 import { sounds } from './lib/sounds'
 import type { YTPlayer } from './lib/youtube'
+import { useCall } from './session/call'
 import { SessionConnection, type SessionEvent } from './session/connection'
 
 /** One press of the jump controls moves the clock and the video this far. */
@@ -227,6 +227,14 @@ function Session({
 	const music = musicPlays(clock)
 	const idle = isFresh(clock)
 
+	const call = useCall({
+		clock,
+		members,
+		you: connection.memberId,
+		serverNow: connection.serverNow,
+		onVoice: connection.voice,
+	})
+
 	const [pomos, setPomos] = useState(readPomos)
 	const [day, setDay] = useState(() => resolveDay(loadDay(), pomos, Date.now()))
 	// the saved intention belongs to the saved day; a new day starts blank
@@ -315,6 +323,9 @@ function Session({
 			const since = Math.min(now, lastChange?.stampedAt ?? now)
 			const caughtUp = running ? resumeWork(open, now) : pauseWork(open, since)
 			setPomos(tidy.map((p) => (p === open ? caughtUp : p)))
+			// the ledger files under the day of the pomo it carries on; the 4am
+			// question moves it on from there
+			setDay(open.day)
 		} else if (clock.phase === 'work' && running) {
 			setPomos([...tidy, newPomo(now, true)])
 		} else {
@@ -573,6 +584,8 @@ function Session({
 		setReview(null)
 	}
 
+	const focusIntention = () => document.getElementById('intention-input')?.focus()
+
 	const copyInvite = async () => {
 		await navigator.clipboard.writeText(location.href)
 		setCopied(true)
@@ -591,6 +604,7 @@ function Session({
 				'pomo flex min-h-screen flex-col',
 				isBreak && 'is-break',
 				isYap && 'is-yap',
+				isBreak && !isYap && 'is-dance',
 				settings.lessMotion && 'is-calm',
 			)}
 		>
@@ -786,26 +800,27 @@ function Session({
 					</section>
 				</div>
 
-				<aside className="flex min-w-0 flex-col gap-6 text-sm lg:border-l lg:border-current/20 lg:pl-6">
-					<Members members={members} you={connection.memberId} />
+				<aside className="flex min-w-0 flex-col gap-[26px] lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto lg:border-l lg:border-current/20 lg:pl-6">
 					{status === 'live' && (
-						<CallPanel
+						<SideColumn
 							clock={clock}
 							members={members}
 							you={connection.memberId}
 							serverNow={connection.serverNow}
-							onVoice={connection.voice}
+							call={call}
+							onVote={(kind) => connection.vote(kind)}
+							onLonger={() => press({ type: 'stretch', deltaMs: STRETCH_MS })}
+							onSetIntention={focusIntention}
+							pomoNumber={pomoNumberOf(pomos, day)}
 						/>
 					)}
-					<VotePanel
-						clock={clock}
-						members={members}
-						you={connection.memberId}
-						onVote={(kind) => connection.vote(kind)}
-					/>
-					{settings.showLedger && <Ledger pomos={pomos} day={day} onEdit={setEditing} />}
+					{settings.showLedger && (
+						<Ledger pomos={pomos} day={day} today={today} onEdit={setEditing} />
+					)}
 				</aside>
 			</div>
+
+			{call.audio}
 
 			<footer className="font-ui px-6 pb-6 text-center text-xs opacity-60">
 				pomoduo, grown from{' '}

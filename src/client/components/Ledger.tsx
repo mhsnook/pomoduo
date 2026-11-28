@@ -6,19 +6,27 @@ import remarkGfm from 'remark-gfm'
 import { cn } from '../lib/format'
 import { dayLabel, dayTotals, formatDuration, pastDays, type Pomo } from '../lib/ledger'
 import { fmtTime, workedMinutes } from './time'
+import { SideHeading, SideLink } from './ui'
+
+/** What a note keeps on one line: its emphasis, not its paragraphs, blocks or links. */
+const INLINE = ['strong', 'em', 'del', 'code']
+const PLUGINS = [remarkGfm]
 
 export const Ledger = memo(function Ledger({
 	pomos,
 	day,
+	today,
 	onEdit,
 }: {
 	pomos: Pomo[]
+	/** The work day the ledger files under, which is not always today's. */
 	day: string
+	today: string
 	onEdit: (pomo: Pomo) => void
 }) {
 	const [browsing, setBrowsing] = useState(false)
 	const [openDay, setOpenDay] = useState<string | null>(null)
-	const today = pomos.filter((p) => p.day === day)
+	const filed = pomos.filter((p) => p.day === day)
 	const past = pastDays(pomos, day)
 	// the day being read can lose its last pomo to an edit while it is open
 	const viewing = openDay && {
@@ -32,47 +40,45 @@ export const Ledger = memo(function Ledger({
 	}
 
 	return (
-		<section data-testid="ledger" className="flex flex-col gap-3">
+		<section data-testid="ledger" className="mt-auto flex flex-col gap-2.5">
 			{!browsing && (
 				<>
 					<LedgerHeading
-						title={dayLabel(day)}
-						pomos={today}
+						title={`${day === today ? 'Today' : dayLabel(day)} · ${summarize(filed)}`}
 						action={
-							<button
-								type="button"
-								id="pomo-history"
-								data-testid="history-button"
-								aria-label="Past days"
-								title="Past days"
+							<SideLink
+								id="past-days-open"
+								testId="past-days-open"
 								onClick={() => setBrowsing(true)}
-								className="btn btn-ghost btn-sm shrink-0"
 							>
-								🕘 History
-							</button>
+								Past days
+							</SideLink>
 						}
 					/>
-					{today.length === 0 && <p className="opacity-60">No pomos yet today.</p>}
-					<PomoList pomos={today} onEdit={onEdit} />
+					<PomoList pomos={filed} onEdit={onEdit} />
 				</>
 			)}
 
 			{browsing && !viewing && (
 				<>
-					<LedgerHeading title="Past days" action={<CloseHistory onClick={close} />} />
-					{past.length === 0 && <p className="opacity-60">No earlier days yet.</p>}
-					<ol className="flex flex-col gap-2">
+					<LedgerHeading title="Past days" action={<ClosePastDays onClick={close} />} />
+					{past.length === 0 && (
+						<p className="text-side-muted text-[13px]">No earlier days yet.</p>
+					)}
+					<ol className="flex flex-col">
 						{past.map((entry) => (
-							<li key={entry.day}>
+							<li key={entry.day} className="border-side-rule border-t">
 								<button
 									type="button"
-									id={`history-day-${entry.day}`}
-									data-testid="history-day"
+									id={`past-day-${entry.day}`}
+									data-testid="past-day"
 									onClick={() => setOpenDay(entry.day)}
-									className="font-ui flex w-full flex-col items-start gap-0.5 rounded-lg bg-white/10 px-3 py-2 text-left hover:bg-white/20"
+									className="hover:bg-side-row flex w-full items-baseline justify-between gap-2 px-0.5 py-2 text-left"
 								>
-									<span>{dayLabel(entry.day)}</span>
-									<span className="text-xs opacity-70">{summarize(entry.pomos)}</span>
+									<span className="text-side-text text-sm">{dayLabel(entry.day)}</span>
+									<span className="text-side-muted text-xs">
+										{summarize(entry.pomos)}
+									</span>
 								</button>
 							</li>
 						))}
@@ -83,26 +89,20 @@ export const Ledger = memo(function Ledger({
 			{browsing && viewing && (
 				<>
 					<LedgerHeading
-						title={dayLabel(viewing.day)}
-						pomos={viewing.pomos}
+						title={`${dayLabel(viewing.day)} · ${summarize(viewing.pomos)}`}
 						back={
-							<button
-								type="button"
-								id="history-back"
-								data-testid="history-back"
-								aria-label="Back to the list of past days"
+							<SideLink
+								id="past-days-back"
+								testId="past-days-back"
+								label="Back to the list of past days"
 								title="All past days"
 								onClick={() => setOpenDay(null)}
-								className="btn btn-circle btn-ghost btn-sm shrink-0"
 							>
 								‹
-							</button>
+							</SideLink>
 						}
-						action={<CloseHistory onClick={close} />}
+						action={<ClosePastDays onClick={close} />}
 					/>
-					{viewing.pomos.length === 0 && (
-						<p className="opacity-60">Nothing left on this day.</p>
-					)}
 					<PomoList pomos={viewing.pomos} onEdit={onEdit} />
 				</>
 			)}
@@ -112,98 +112,107 @@ export const Ledger = memo(function Ledger({
 
 const summarize = (pomos: Pomo[]) => {
 	const { count, minutes } = dayTotals(pomos)
+	if (count === 0) return 'no pomos yet'
 	return `${count} ${count === 1 ? 'pomo' : 'pomos'} · ${formatDuration(minutes)}`
 }
 
 function LedgerHeading({
 	title,
-	pomos,
 	back,
 	action,
 }: {
 	title: string
-	pomos?: Pomo[]
 	back?: ReactNode
 	action: ReactNode
 }) {
 	return (
-		<div className="flex items-start justify-between gap-2">
+		<div className="flex items-baseline justify-between gap-2">
 			{back}
-			<div className="mr-auto flex min-w-0 flex-col">
-				<h2 className="font-display text-xl">{title}</h2>
-				{pomos && pomos.length > 0 && (
-					<span className="font-ui text-xs opacity-70">{summarize(pomos)}</span>
-				)}
+			<div className="mr-auto min-w-0">
+				<SideHeading>{title}</SideHeading>
 			</div>
 			{action}
 		</div>
 	)
 }
 
-function CloseHistory({ onClick }: { onClick: () => void }) {
+function ClosePastDays({ onClick }: { onClick: () => void }) {
 	return (
-		<button
-			type="button"
-			id="history-close"
-			data-testid="history-close"
-			aria-label="Close the history and go back to today"
+		<SideLink
+			id="past-days-close"
+			testId="past-days-close"
+			label="Close the past days and go back to today"
 			title="Back to today"
 			onClick={onClick}
-			className="btn btn-circle btn-ghost btn-sm shrink-0"
 		>
-			✕
-		</button>
+			Today
+		</SideLink>
 	)
 }
 
+function status(p: Pomo) {
+	if (!p.end) return { word: 'now', className: 'text-side-link' }
+	if (p.confirmed) return { word: 'done', className: 'text-side-done' }
+	return { word: 'unreviewed', className: 'text-side-muted' }
+}
+
+/** One line per pomo. The whole line opens it for editing; the times are on hover. */
 function PomoList({ pomos, onEdit }: { pomos: Pomo[]; onEdit: (pomo: Pomo) => void }) {
 	return (
-		<ol className="flex flex-col gap-2">
-			{pomos.map((p) => (
-				<li
-					key={p.id}
-					data-testid="ledger-entry"
-					className={cn(
-						'flex flex-col gap-1 rounded-lg bg-white/10 px-3 py-2',
-						!p.end && 'ring-1 ring-[var(--pomo-accent)]',
-					)}
-				>
-					<div className="font-ui flex justify-between gap-2 text-xs tabular-nums opacity-70">
-						<span>
-							{fmtTime(p.start)} – {p.end ? fmtTime(p.end) : 'now'}
-							{p.end && ` · ${workedMinutes(p)}m`}
-						</span>
-						<span className="flex items-center gap-1">
+		<ol className="flex flex-col">
+			{pomos.map((p) => {
+				const text = (p.end ? p.note || p.intention : p.intention).replace(
+					/\s*\n\s*/g,
+					' ',
+				)
+				const { word, className } = status(p)
+				return (
+					<li key={p.id} data-testid="ledger-entry" className="border-side-rule border-t">
+						<button
+							type="button"
+							data-testid="ledger-edit"
+							id={`ledger-edit-${p.id}`}
+							title={`${fmtTime(p.start)} – ${p.end ? `${fmtTime(p.end)} · ${workedMinutes(p)}m` : 'now'}`}
+							onClick={() => onEdit(p)}
+							className="hover:bg-side-row flex w-full items-center gap-2.5 px-0.5 py-2 text-left"
+						>
+							<span className="sr-only">Edit the pomo: </span>
 							<span
-								title={p.confirmed ? 'confirmed' : p.end ? 'unconfirmed' : 'in progress'}
+								className={cn(
+									'min-w-[42px] flex-none text-[12.5px] whitespace-nowrap tabular-nums',
+									p.end ? 'text-side-muted' : 'text-side-link',
+								)}
 							>
-								{p.confirmed ? '✅' : p.end ? '◌' : '⏳'}
+								{fmtTime(p.start)}
 							</span>
-							<button
-								type="button"
-								data-testid="ledger-edit"
-								id={`ledger-edit-${p.id}`}
-								aria-label={`Edit the pomo that started at ${fmtTime(p.start)}`}
-								title="Edit"
-								onClick={() => onEdit(p)}
-								className="btn btn-ghost btn-xs"
+							<span
+								className={cn(
+									'min-w-0 flex-1 truncate text-sm',
+									text ? 'text-side-text' : 'text-side-muted italic',
+								)}
 							>
-								✎
-							</button>
-						</span>
-					</div>
-					<div
-						className={cn(
-							'prose prose-sm prose-invert max-w-none',
-							!p.confirmed && 'italic',
-						)}
-					>
-						<ReactMarkdown remarkPlugins={[remarkGfm]}>
-							{(p.end ? p.note || p.intention : p.intention) || '_(no intention)_'}
-						</ReactMarkdown>
-					</div>
-				</li>
-			))}
+								{text ? (
+									<ReactMarkdown
+										remarkPlugins={PLUGINS}
+										allowedElements={INLINE}
+										unwrapDisallowed
+									>
+										{text}
+									</ReactMarkdown>
+								) : (
+									'no intention'
+								)}
+							</span>
+							{p.end && (
+								<span className="text-side-muted flex-none text-xs tabular-nums">
+									{workedMinutes(p)}m
+								</span>
+							)}
+							<span className={cn('flex-none text-xs', className)}>{word}</span>
+						</button>
+					</li>
+				)
+			})}
 		</ol>
 	)
 }

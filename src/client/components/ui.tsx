@@ -39,6 +39,58 @@ export function TransportButton({
 	)
 }
 
+/** The small capitals over each part of the side column. */
+export function SideHeading({
+	children,
+	className = 'text-side-muted',
+	testId,
+}: {
+	children: ReactNode
+	/** The colour, and the layout of anything set beside the words. */
+	className?: string
+	testId?: string
+}) {
+	return (
+		<h2
+			data-testid={testId}
+			className={cn('text-xs font-bold tracking-[0.14em] uppercase', className)}
+		>
+			{children}
+		</h2>
+	)
+}
+
+/** A small text button in the side column, beside a heading or on a row. */
+export function SideLink({
+	id,
+	testId,
+	label,
+	title,
+	onClick,
+	children,
+}: {
+	id?: string
+	testId: string
+	label?: string
+	title?: string
+	onClick: () => void
+	children: ReactNode
+}) {
+	return (
+		<button
+			type="button"
+			id={id}
+			data-testid={testId}
+			aria-label={label}
+			title={title}
+			onClick={onClick}
+			className="text-side-link shrink-0 text-[13px] hover:underline"
+		>
+			{children}
+		</button>
+	)
+}
+
 export function clampMinutes(v: string, fallback: number) {
 	const n = Number.parseInt(v, 10)
 	return Number.isFinite(n) && n > 0 ? Math.min(n, 180) : fallback

@@ -25,7 +25,9 @@ synced through party-db.
   clock row by hand, on either side.
 - Members change the room only through its own endpoints, never party-db's
   write path.
-- Unit tests cover pure modules: `*.test.ts` next to the module.
+- Unit tests cover pure modules: `*.test.ts` next to the module, run in Node.
+  The session room's tests, `src/server/*.test.ts`, run in workerd through
+  `@cloudflare/vitest-plugin`, against a real Durable Object.
 - Information someone needs goes on the page or one tap away, never only in a
   hover or a `title`. A hover never reaches a touch screen. A `title` may repeat
   what the page already says.

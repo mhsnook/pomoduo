@@ -12,7 +12,7 @@ ledger, and a dance break. Grown from [pomodance](https://emju.in/pomodance).
 ```sh
 pnpm install
 pnpm dev      # the app and the session rooms, on one origin
-pnpm check    # format, lint, types, and unit tests; the pre-commit hook runs this
+pnpm check    # format, lint, types, and tests; the pre-commit hook runs this
 pnpm deploy   # build and deploy the Worker
 ```
 

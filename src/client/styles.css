@@ -351,7 +351,9 @@ body {
 }
 
 .pomo.is-break.is-calm .pomo-video-main,
-.pomo.is-calm .pomo-dancers span {
+.pomo.is-calm .pomo-dancers span,
+.pomo.is-calm .pomo-ringing::after,
+.pomo.is-calm .pomo-breathe {
 	animation: none;
 }
 
@@ -359,7 +361,9 @@ body {
 	.pomo.is-break::before,
 	.pomo.is-break .pomo-clock,
 	.pomo.is-break .pomo-video-main,
-	.pomo-dancers span {
+	.pomo-dancers span,
+	.pomo-ringing::after,
+	.pomo-breathe {
 		animation: none;
 	}
 }
@@ -377,16 +381,30 @@ body {
 	--color-side-muted: #7fa398;
 	--color-side-text: #cfe0da;
 	--color-side-strong: #e6f2ee;
-	--color-side-link: #57d3ad;
-	--color-side-bar: #57d3ad;
+	--color-side-link: var(--pomo-accent);
+	--color-side-bar: var(--pomo-accent);
 	--color-side-done: #6fc39a;
 }
 
 /* ---- the side column ---- */
 
 /* The call is the only thing in the side column that moves, and only while
-   someone is on it without you. */
+   someone is on it without you. The ripple is a layer behind the block that
+   grows and fades, so it runs on the compositor; the column keeps room around
+   the block for it to grow into. */
 .pomo-ringing {
+	position: relative;
+}
+
+.pomo-ringing::after {
+	content: '';
+	position: absolute;
+	inset: -1px;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--color-call);
+	opacity: 0;
+	pointer-events: none;
 	animation: pomo-ring 2.2s ease-out infinite;
 }
 
@@ -394,27 +412,15 @@ body {
 	animation: pomo-breathe 1.3s ease-in-out infinite;
 }
 
-.pomo.is-calm .pomo-ringing,
-.pomo.is-calm .pomo-breathe {
-	animation: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.pomo-ringing,
-	.pomo-breathe {
-		animation: none;
-	}
-}
-
 @keyframes pomo-ring {
 	0% {
-		box-shadow: 0 0 0 0 rgb(255 140 105 / 0.45);
+		opacity: 0.45;
+		transform: scale(1);
 	}
-	70% {
-		box-shadow: 0 0 0 14px rgb(255 140 105 / 0);
-	}
+	70%,
 	100% {
-		box-shadow: 0 0 0 0 rgb(255 140 105 / 0);
+		opacity: 0;
+		transform: scale(1.08, 1.12);
 	}
 }
 

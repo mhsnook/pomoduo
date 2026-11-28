@@ -1,14 +1,18 @@
 import type { ReactNode } from 'react'
 
-import { type Clock, isFresh } from '../../shared/clock'
+import { type Clock, elapsedIn, isFresh } from '../../shared/clock'
 import type { BreakKind } from '../../shared/vote'
 import { formatLeft } from '../lib/format'
 import { useClockSeconds } from './Clock'
+import { SideHeading, SideLink } from './ui'
 
-/**
- * Where the current phase stands, in one line and a bar, and what comes after
- * it. It tops the side column whenever the call is not open.
- */
+function leftOf(clock: Clock, seconds: number) {
+	if (clock.endsAt !== null) return `${formatLeft(seconds)} left`
+	if (isFresh(clock)) return `${formatLeft(seconds)} to go`
+	return `${formatLeft(seconds)} left, paused`
+}
+
+/** Where the current phase stands, in one line and a bar, and what comes after it. */
 export function PhaseProgress({
 	clock,
 	serverNow,
@@ -19,52 +23,40 @@ export function PhaseProgress({
 }: {
 	clock: Clock
 	serverNow: () => number
-	/** Which of today's pomos this work phase is. */
+	/** Which of the day's pomos this work phase is. */
 	pomoNumber: number
 	/** The kind of break the vote would give if work ended now. */
 	nextKind: BreakKind
 	onLonger: () => void
 	children?: ReactNode
 }) {
-	const seconds = useClockSeconds(clock, serverNow)
+	const left = leftOf(clock, useClockSeconds(clock, serverNow))
 	const inBreak = clock.phase === 'break'
-	const done = Math.min(
-		1,
-		Math.max(0, 1 - (seconds * 1000) / clock.durations[clock.phase]),
-	)
-	const state = clock.endsAt !== null ? 'left' : isFresh(clock) ? 'to go' : 'left, paused'
+	const done = elapsedIn(clock, serverNow()) / clock.durations[clock.phase]
 
 	return (
 		<section data-testid="phase-progress" className="flex flex-col gap-2.5">
-			<div className="flex items-baseline justify-between gap-2">
-				{inBreak ? (
-					<h2
-						data-testid="break-kind"
-						className="text-side-label text-xs font-bold tracking-[0.14em] uppercase"
-					>
-						{clock.breakKind} break · {formatLeft(seconds)} {state}
-					</h2>
-				) : (
-					<h2 className="text-side-link text-xs font-bold tracking-[0.14em] uppercase">
-						Work · pomo {pomoNumber}
-					</h2>
-				)}
-				{inBreak ? (
-					<button
-						type="button"
-						data-testid="side-longer"
+			{inBreak ? (
+				<div className="flex items-baseline justify-between gap-2">
+					<SideHeading testId="break-kind">
+						{clock.breakKind} break · {left}
+					</SideHeading>
+					<SideLink
+						testId="side-longer"
 						title="Make this break a minute longer"
 						onClick={onLonger}
-						className="text-side-link text-[13px] hover:underline"
 					>
 						＋1 min
-					</button>
-				) : (
+					</SideLink>
+				</div>
+			) : (
+				<div className="flex items-baseline justify-between gap-2">
+					<SideHeading className="text-side-link">Work · pomo {pomoNumber}</SideHeading>
 					<span className="text-side-strong text-[15px] font-medium tabular-nums">
-						{formatLeft(seconds)} {state}
+						{left}
 					</span>
-				)}
-			</div>
+				</div>
+			)}
 			<progress
 				className="progress text-side-bar h-1"
 				value={done}

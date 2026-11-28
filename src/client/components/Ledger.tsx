@@ -4,32 +4,29 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { cn } from '../lib/format'
-import {
-	dayLabel,
-	dayTotals,
-	formatDuration,
-	pastDays,
-	type Pomo,
-	workDayOf,
-} from '../lib/ledger'
+import { dayLabel, dayTotals, formatDuration, pastDays, type Pomo } from '../lib/ledger'
 import { fmtTime, workedMinutes } from './time'
-import { SideHeading } from './ui'
+import { SideHeading, SideLink } from './ui'
 
-/** What a note keeps on one line: its emphasis, not its blocks or its links. */
-const INLINE = ['p', 'strong', 'em', 'del', 'code']
+/** What a note keeps on one line: its emphasis, not its paragraphs, blocks or links. */
+const INLINE = ['strong', 'em', 'del', 'code']
+const PLUGINS = [remarkGfm]
 
 export const Ledger = memo(function Ledger({
 	pomos,
 	day,
+	today,
 	onEdit,
 }: {
 	pomos: Pomo[]
+	/** The work day the ledger files under, which is not always today's. */
 	day: string
+	today: string
 	onEdit: (pomo: Pomo) => void
 }) {
 	const [browsing, setBrowsing] = useState(false)
 	const [openDay, setOpenDay] = useState<string | null>(null)
-	const today = pomos.filter((p) => p.day === day)
+	const filed = pomos.filter((p) => p.day === day)
 	const past = pastDays(pomos, day)
 	// the day being read can lose its last pomo to an edit while it is open
 	const viewing = openDay && {
@@ -47,21 +44,19 @@ export const Ledger = memo(function Ledger({
 			{!browsing && (
 				<>
 					<LedgerHeading
-						title={`${day === workDayOf(new Date()) ? 'Today' : dayLabel(day)} · ${summarize(today)}`}
+						title={`${day === today ? 'Today' : dayLabel(day)} · ${summarize(filed)}`}
 						action={
-							<button
-								type="button"
+							<SideLink
 								id="pomo-history"
-								data-testid="history-button"
+								testId="history-button"
 								title="Past days"
 								onClick={() => setBrowsing(true)}
-								className="text-side-link shrink-0 text-[13px] hover:underline"
 							>
 								History
-							</button>
+							</SideLink>
 						}
 					/>
-					<PomoList pomos={today} onEdit={onEdit} />
+					<PomoList pomos={filed} onEdit={onEdit} />
 				</>
 			)}
 
@@ -97,17 +92,15 @@ export const Ledger = memo(function Ledger({
 					<LedgerHeading
 						title={`${dayLabel(viewing.day)} · ${summarize(viewing.pomos)}`}
 						back={
-							<button
-								type="button"
+							<SideLink
 								id="history-back"
-								data-testid="history-back"
-								aria-label="Back to the list of past days"
+								testId="history-back"
+								label="Back to the list of past days"
 								title="All past days"
 								onClick={() => setOpenDay(null)}
-								className="text-side-link shrink-0 text-[13px]"
 							>
 								‹
-							</button>
+							</SideLink>
 						}
 						action={<CloseHistory onClick={close} />}
 					/>
@@ -146,17 +139,15 @@ function LedgerHeading({
 
 function CloseHistory({ onClick }: { onClick: () => void }) {
 	return (
-		<button
-			type="button"
+		<SideLink
 			id="history-close"
-			data-testid="history-close"
-			aria-label="Close the history and go back to today"
+			testId="history-close"
+			label="Close the history and go back to today"
 			title="Back to today"
 			onClick={onClick}
-			className="text-side-link shrink-0 text-[13px] hover:underline"
 		>
 			Today
-		</button>
+		</SideLink>
 	)
 }
 
@@ -203,10 +194,9 @@ function PomoList({ pomos, onEdit }: { pomos: Pomo[]; onEdit: (pomo: Pomo) => vo
 							>
 								{text ? (
 									<ReactMarkdown
-										remarkPlugins={[remarkGfm]}
+										remarkPlugins={PLUGINS}
 										allowedElements={INLINE}
 										unwrapDisallowed
-										components={{ p: ({ children }) => <>{children}</> }}
 									>
 										{text}
 									</ReactMarkdown>

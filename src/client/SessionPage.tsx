@@ -22,6 +22,7 @@ import {
 } from '../shared/clock'
 import type { ClockRow } from '../shared/schema'
 import { Clock } from './components/Clock'
+import { Ledger } from './components/Ledger'
 import { PhaseVideo } from './components/PhaseVideo'
 import { EditPomoDialog, ReviewDialog } from './components/PomoDialogs'
 import { SideColumn } from './components/SideColumn'
@@ -44,6 +45,7 @@ import {
 	loadIntention,
 	pauseWork,
 	type Pomo,
+	pomoNumberOf,
 	readPomos,
 	resolveDay,
 	resumeWork,
@@ -579,10 +581,6 @@ function Session({
 	}
 
 	const today = workDayOf(new Date())
-	// the open pomo can be filed under another day than the one the ledger shows
-	const pomoNumber = current
-		? pomos.filter((p) => p.day === current.day).indexOf(current) + 1
-		: pomos.filter((p) => p.day === day && p.end !== null).length + 1
 	// enter puts you back to work, but will not start a break you stopped on purpose
 	const enterStarts = !running && (idle || phase === 'work')
 
@@ -789,6 +787,7 @@ function Session({
 					</section>
 				</div>
 
+				{/* the padding inside this scroll box is room for the ringing call's ripple */}
 				<aside className="flex min-w-0 flex-col gap-[26px] lg:sticky lg:top-2 lg:-mr-4 lg:h-[calc(100dvh-1rem)] lg:self-start lg:overflow-y-auto lg:border-l lg:border-current/20 lg:py-4 lg:pr-4 lg:pl-6">
 					{status === 'live' && (
 						<SideColumn
@@ -799,13 +798,12 @@ function Session({
 							onVoice={connection.voice}
 							onVote={(kind) => connection.vote(kind)}
 							onLonger={() => press({ type: 'stretch', deltaMs: STRETCH_MS })}
-							onSetIntention={isBreak ? undefined : focusIntention}
-							pomos={pomos}
-							day={day}
-							pomoNumber={pomoNumber}
-							showLedger={settings.showLedger}
-							onEditPomo={setEditing}
+							onSetIntention={focusIntention}
+							pomoNumber={pomoNumberOf(pomos, day)}
 						/>
+					)}
+					{settings.showLedger && (
+						<Ledger pomos={pomos} day={day} today={today} onEdit={setEditing} />
 					)}
 				</aside>
 			</div>

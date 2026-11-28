@@ -51,6 +51,14 @@ export type CallState = {
 	open: boolean
 	/** Whether this device is on it. */
 	onCall: boolean
+	/** The other members here who are on the call. */
+	others: Member[]
+	/** The members here who are not on the call, you first. */
+	waitingOn: Member[]
+	/** How many members here are on the call, you counted by this device rather than the room. */
+	onCount: number
+	/** Someone else is on the call and you are not: the one state that rings. */
+	ringing: boolean
 	muted: boolean
 	/** On the call, but this device's side of it has not come up yet. */
 	waiting: boolean
@@ -171,10 +179,19 @@ export function useCall({
 	}
 
 	const isListening = onCall && listening
+	const here = members.filter((m) => m.here)
+	const others = here.filter((m) => m.id !== you && m.onCall)
+	const waitingOn = here
+		.filter((m) => (m.id === you ? !onCall : !m.onCall))
+		.sort((a, b) => Number(b.id === you) - Number(a.id === you))
 
 	return {
 		open: callOpen,
 		onCall,
+		others,
+		waitingOn,
+		onCount: others.length + Number(onCall),
+		ringing: callOpen && !onCall && others.length > 0,
 		muted,
 		waiting,
 		listening: isListening,

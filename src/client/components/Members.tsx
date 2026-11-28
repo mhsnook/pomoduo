@@ -1,6 +1,7 @@
 import type { Phase } from '../../shared/clock'
 import type { Member } from '../../shared/schema'
 import { cn, displayName, initialOf } from '../lib/format'
+import type { CallState } from '../session/call'
 import { SideHeading } from './ui'
 
 /** Avatar grounds and letters, picked by member id so a person keeps theirs. */
@@ -33,40 +34,37 @@ export function Avatar({ member, large }: { member: Member; large?: boolean }) {
 }
 
 /**
- * How one member sits on the call. `mic` is where the others pull them from, so
- * a member with none who is not listening is a moment away from being heard.
+ * Where a member sits on the call, while it is open. `mic` is where the others
+ * pull them from, so a member with none who is not listening is a moment away
+ * from being heard. Coral on your own row means the same as the ringing call.
  */
-function callLine(member: Member) {
-	if (member.listening) return 'on the call · listening'
-	if (member.muted) return 'on the call · muted'
-	if (!member.mic) return 'on the call · connecting'
-	return 'on the call · mic live'
+function micOf(member: Member) {
+	if (member.listening) return 'listening'
+	if (member.muted) return 'muted'
+	if (!member.mic) return 'connecting'
+	return 'mic live'
 }
 
-/** Where a member sits on the call, while it is open. */
 function CallLine({
 	member,
 	isYou,
-	othersOnCall,
+	ringing,
 }: {
 	member: Member
 	isYou: boolean
-	othersOnCall: boolean
+	ringing: boolean
 }) {
-	if (member.onCall)
+	if (!member.onCall)
 		return (
-			<span className={cn('text-[13px]', isYou ? 'text-side-text' : 'text-on-call')}>
-				{callLine(member)}
+			<span
+				className={cn('text-[13px]', isYou && ringing ? 'text-call' : 'text-side-muted')}
+			>
+				{isYou ? 'not on the call yet' : 'not on the call'}
 			</span>
 		)
 	return (
-		<span
-			className={cn(
-				'text-[13px]',
-				isYou && othersOnCall ? 'text-call' : 'text-side-muted',
-			)}
-		>
-			{isYou ? 'not on the call yet' : 'not on the call'}
+		<span className={cn('text-[13px]', isYou ? 'text-side-text' : 'text-on-call')}>
+			on the call · {micOf(member)}
 		</span>
 	)
 }
@@ -80,12 +78,14 @@ function IntentionLine({
 	member,
 	isYou,
 	callOpen,
+	inWork,
 	onSetIntention,
 }: {
 	member: Member
 	isYou: boolean
 	callOpen: boolean
-	onSetIntention?: () => void
+	inWork: boolean
+	onSetIntention: () => void
 }) {
 	if (member.intention)
 		return (
@@ -99,7 +99,7 @@ function IntentionLine({
 			</span>
 		)
 	if (callOpen) return null
-	if (isYou && onSetIntention)
+	if (isYou && inWork)
 		return (
 			<button
 				type="button"
@@ -121,21 +121,20 @@ export function Members({
 	members,
 	you,
 	phase,
-	callOpen,
+	call,
 	onSetIntention,
 }: {
 	members: Member[]
 	you: string
 	phase: Phase
-	callOpen: boolean
-	onSetIntention?: () => void
+	call: CallState
+	onSetIntention: () => void
 }) {
 	if (members.length === 0) return null
-	const here = members.filter((m) => m.here)
-	const onCall = here.filter((m) => m.onCall)
-	const othersOnCall = onCall.some((m) => m.id !== you)
+	const callOpen = call.open
+	const here = call.onCount + call.waitingOn.length
 	// a room of one holds no vote, so a pick left over from company is not shown
-	const voting = here.length > 1
+	const voting = here > 1
 	// everyone else first, the ones here before the ones away; you come last
 	const sorted = [...members].sort(
 		(a, b) =>
@@ -143,11 +142,8 @@ export function Members({
 			Number(b.here) - Number(a.here) ||
 			b.seenAt - a.seenAt,
 	)
-	const doing =
-		phase === 'break' ? 'On break' : here.length > 1 ? 'Working together' : 'Working'
-	const count = callOpen
-		? `${onCall.length} of ${here.length} on the call`
-		: String(here.length)
+	const doing = phase === 'break' ? 'On break' : voting ? 'Working together' : 'Working'
+	const count = callOpen ? `${call.onCount} of ${here} on the call` : String(here)
 
 	return (
 		<section data-testid="members" className="flex flex-col gap-2.5">
@@ -191,10 +187,11 @@ export function Members({
 									member={member}
 									isYou={isYou}
 									callOpen={callOpen}
+									inWork={phase === 'work'}
 									onSetIntention={onSetIntention}
 								/>
 								{callOpen && (
-									<CallLine member={member} isYou={isYou} othersOnCall={othersOnCall} />
+									<CallLine member={member} isYou={isYou} ringing={call.ringing} />
 								)}
 							</div>
 						</li>

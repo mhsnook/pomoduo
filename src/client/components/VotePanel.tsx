@@ -1,22 +1,23 @@
 import type { Clock } from '../../shared/clock'
-import type { Member } from '../../shared/schema'
-import { BREAK_KINDS, type BreakKind, defaultKind, standing } from '../../shared/vote'
+import {
+	BREAK_KINDS,
+	type BreakKind,
+	defaultKind,
+	type standing,
+} from '../../shared/vote'
 import { cn } from '../lib/format'
 import { SideHeading } from './ui'
 
 const KIND_NAME: Record<BreakKind, string> = { dance: 'Dance', yap: 'Yap' }
 
+type Standing = ReturnType<typeof standing>
+
 const picks = (n: number) => `${n} ${n === 1 ? 'pick' : 'picks'}`
 
 /** How the vote stands, in one line: what wins if work ends now, and why. */
-function standingLine(
-	total: Record<BreakKind, number>,
-	leader: BreakKind,
-	clock: Clock,
-	here: number,
-) {
+function standingLine({ total, leader }: Standing, clock: Clock) {
 	if (total.dance === 0 && total.yap === 0)
-		return `Nobody has picked, so it defaults to a ${defaultKind(here)} break.`
+		return `Nobody has picked, so it defaults to a ${leader} break.`
 	if (total.dance === total.yap)
 		return clock.tally.lastLoser
 			? `Tied, so ${KIND_NAME[leader]} wins: it lost last time.`
@@ -33,22 +34,20 @@ function standingLine(
  */
 export function VotePanel({
 	clock,
-	members,
-	you,
+	here,
+	vote,
+	mine,
 	onVote,
 }: {
 	clock: Clock
-	members: Member[]
-	you: string
+	/** How many members are here, which is who the vote counts. */
+	here: number
+	vote: Standing
+	mine: BreakKind | null
 	onVote: (kind: BreakKind | null) => void
 }) {
-	const here = members.filter((m) => m.here)
-	const { total, leader } = standing(
-		here.map((m) => m.vote),
-		clock.tally,
-	)
-	const mine = members.find((m) => m.id === you)?.vote ?? null
-	if (here.length < 2) return null
+	if (here < 2) return null
+	const { total } = vote
 
 	return (
 		<section data-testid="vote" className="flex flex-col gap-2.5">
@@ -66,7 +65,10 @@ export function VotePanel({
 						?
 					</summary>
 					<div className="dropdown-content bg-side-pop border-side-edge text-side-text z-20 mt-2 flex w-64 flex-col gap-2 rounded-lg border p-3 text-xs shadow-lg">
-						<p>Saying nothing is not a vote. With nobody picking it is a yap break.</p>
+						<p>
+							Saying nothing is not a vote. With nobody picking it is a{' '}
+							{defaultKind(here)} break.
+						</p>
 						<p>Your pick stays until you change it. Press it again to take it back.</p>
 						<p>
 							A side that loses keeps its votes for next time, so everyone gets their way
@@ -108,7 +110,7 @@ export function VotePanel({
 				})}
 			</div>
 			<p data-testid="vote-standing" className="text-side-muted text-[13px] text-pretty">
-				{standingLine(total, leader, clock, here.length)}
+				{standingLine(vote, clock)}
 			</p>
 		</section>
 	)

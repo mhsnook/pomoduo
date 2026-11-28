@@ -221,6 +221,16 @@ export function pastDays(pomos: Pomo[], day: string): { day: string; pomos: Pomo
 		.map(([key, filed]) => ({ day: key, pomos: [...filed].sort(byStart) }))
 }
 
+/**
+ * Which of its day's pomos the open one is, or the number the next one will
+ * take. The open pomo can be filed under another day than the ledger's.
+ */
+export function pomoNumberOf(pomos: Pomo[], day: string) {
+	const open = pomos.find((p) => p.end === null)
+	if (open) return pomos.filter((p) => p.day === open.day).indexOf(open) + 1
+	return pomos.filter((p) => p.day === day).length + 1
+}
+
 /** What a day came to: how many pomos, and how long the finished ones ran. */
 export function dayTotals(pomos: Pomo[]) {
 	const ms = pomos.reduce((total, p) => total + (p.end ? workedOf(p) : 0), 0)

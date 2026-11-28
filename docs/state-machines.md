@@ -233,8 +233,9 @@ only when a message shows it is more than 100 ms off.
 
 Smaller machines that belong to one device's page.
 
-**The players.** `src/client/SessionPage.tsx`. Each phase has one YouTube
-player, and the page reads the player's own state changes. A change counts as
+**The players.** `src/client/lib/player.ts`, called from
+`src/client/SessionPage.tsx`. Each phase has one YouTube player, and the page
+reads the player's own state changes. A change counts as
 a click on the video only when it goes against what the page last told that
 player, more than 800 ms after it told it.
 

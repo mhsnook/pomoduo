@@ -55,6 +55,7 @@ import {
 	straddlesRollover,
 	workDayOf,
 } from './lib/ledger'
+import { type PlayerReport, reactionTo, type Told } from './lib/player'
 import { placeToTrack } from './lib/playlist'
 import { loadSettings, type Settings, saveSettings } from './lib/settings'
 import { sounds } from './lib/sounds'
@@ -68,12 +69,6 @@ const JUMP_MS = 60_000
 const STRETCH_MS = 60_000
 /** Long enough for a player told to play to have reached playing or buffering. */
 const PLAYBACK_CHECK_MS = 1_500
-/**
- * A player's own play or pause counts as a click on the video only when it
- * contradicts what the page last told that player, and not this soon after.
- * Players report the page's own requests a little late.
- */
-const TOLD_GRACE_MS = 800
 /** How long the intention waits for typing to stop before the session hears it. */
 const MEMBER_UPDATE_MS = 400
 
@@ -277,7 +272,7 @@ function Session({
 	})
 	const players = useRef<Record<Phase, YTPlayer | null>>({ work: null, break: null })
 	/** What the page last asked of each player, and when. */
-	const told = useRef<Record<Phase, { want: 'play' | 'pause'; at: number } | null>>({
+	const told = useRef<Record<Phase, Told>>({
 		work: null,
 		break: null,
 	})
@@ -533,32 +528,27 @@ function Session({
 			played.current[p] = true
 			if (p === phase) setMusicBlocked(false)
 		}
-		if (state === YT.PlayerState.ENDED) {
+		const report: PlayerReport =
+			state === YT.PlayerState.PLAYING
+				? 'playing'
+				: state === YT.PlayerState.PAUSED
+					? 'paused'
+					: state === YT.PlayerState.ENDED
+						? 'ended'
+						: 'other'
+		const reaction = reactionTo(
+			report,
+			{ current: p === phase, told: told.current[p], hasPlayed: played.current[p] },
+			running,
+			Date.now(),
+		)
+		if (reaction?.type === 'next-track')
 			setTrack(p, (tracks[p].index + 1) % settings.videos[p].length)
-			return
-		}
-		// The video's own play and pause drive the clock, but only when they go
-		// against what the page last told the player: those are clicks on the video.
-		const last = told.current[p]
-		const recent = last !== null && Date.now() - last.at < TOLD_GRACE_MS
-		if (p !== phase) {
-			if (state !== YT.PlayerState.PLAYING || (recent && last.want === 'play')) return
-			// playing the other phase's video asks to switch to that phase
+		else if (reaction?.type === 'command') press({ type: reaction.command })
+		else if (reaction?.type === 'switch-phase') {
 			tell(p, 'pause')
-			if (running) setConfirmSwitch(p)
+			if (reaction.ask) setConfirmSwitch(p)
 			else press({ type: 'skip' })
-			return
-		}
-		if (recent) return
-		if (state === YT.PlayerState.PLAYING && !running && last?.want !== 'play') {
-			press({ type: 'start' })
-		} else if (
-			state === YT.PlayerState.PAUSED &&
-			running &&
-			played.current[p] &&
-			last?.want !== 'pause'
-		) {
-			press({ type: 'pause' })
 		}
 	})
 

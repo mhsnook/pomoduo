@@ -89,7 +89,7 @@ export const memberSchema = z.object({
 	here: z.boolean(),
 	/** Server time when this member last connected, left, or changed their details. */
 	seenAt: z.number(),
-	/** The kind of break this member picked for the end of this pomo; null counts as dance. */
+	/** The kind of break this member picked, which stands until they change it; null is no vote. */
 	vote: breakKind.nullable(),
 	/** Whether this member has picked the call up. */
 	onCall: z.boolean(),

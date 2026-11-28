@@ -55,8 +55,9 @@ const commandOf = (row: ClockRow) =>
  *
  * It shows the room's clock, with two exceptions from tree/rules.md: your own
  * press shows at once, and your timer keeps that prediction until every press
- * you made is answered. Each command reaches the video exactly once. The device
- * also flips the phase itself when its own timer reaches zero.
+ * you made is answered. Another member's change still shows the moment it
+ * arrives. Each command reaches the video exactly once. The device also flips
+ * the phase itself when its own timer reaches zero.
  */
 export class SessionConnection {
 	private readonly base: string

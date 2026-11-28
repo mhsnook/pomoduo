@@ -31,8 +31,8 @@ beforeEach(() => {
 	sockets = []
 })
 
-afterEach(() => {
-	for (const socket of sockets) socket.close()
+afterEach(async () => {
+	await Promise.all(sockets.map(leave))
 	vi.useRealTimers()
 })
 
@@ -329,7 +329,7 @@ describe('the alarm', () => {
 		await leave(ana)
 		at(3 * MIN)
 		await leave(ben)
-		// work ends at 25 minutes, and ben comes off the roster at 13
+		// ana comes off the roster at 11 minutes, ben at 13, and work ends at 25
 		expect(await alarm()).toBe(T + 11 * MIN)
 	})
 

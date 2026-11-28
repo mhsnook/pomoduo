@@ -5,7 +5,8 @@
     "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": [],
+    // `cloudflare:test`, for the room's tests, which run in workerd
+    "types": ["@cloudflare/vitest-plugin/types"],
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

@@ -149,8 +149,8 @@ stateDiagram-v2
 - On the device, being on the call is worked out each render:
   `callOpen && !hungUp && (answered || (mic allowed && phase is break))`.
   When the call opens or closes, every per-call flag resets.
-- Hung up looks the same as open and not on. It differs in one way: it stops
-  a break's call from joining on its own.
+- Open and not on rings while another member is on the call. Hung up does
+  not ring, and it stops a break's call from joining on its own.
 - After 10 seconds coming up, the device says its mic has not reached the
   other side.
 - Mute is separate from all of these and carries from one call to the next.
@@ -233,8 +233,9 @@ only when a message shows it is more than 100 ms off.
 
 Smaller machines that belong to one device's page.
 
-**The players.** `src/client/SessionPage.tsx`. Each phase has one YouTube
-player, and the page reads the player's own state changes. A change counts as
+**The players.** `src/client/lib/player.ts`, called from
+`src/client/SessionPage.tsx`. Each phase has one YouTube player, and the page
+reads the player's own state changes. A change counts as
 a click on the video only when it goes against what the page last told that
 player, more than 800 ms after it told it.
 
